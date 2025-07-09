@@ -1,0 +1,142 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [ master, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  pre_job:
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.skip_check.outputs.should_skip }}
+    steps:
+      - id: skip_check
+        uses: fkirc/skip-duplicate-actions@v3.4.0
+        with:
+          skip_after_successful_duplicate: 'true'
+
+  build:
+    needs: pre_job
+    if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/develop' && 'development' || '' }}
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+
+    env:
+      IMAGE_BASE: ${{ github.repository }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Prepare environment
+        run: |
+          echo "REPO_NAME=${IMAGE_BASE,,}" >> $GITHUB_ENV
+
+      - name: Login to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.PAT_TOKEN }}
+
+      - name: Determine tags
+        id: tags
+        run: |
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+            echo "tags=ghcr.io/${{ env.REPO_NAME }}:${VERSION},ghcr.io/${{ env.REPO_NAME }}:latest" >> $GITHUB_OUTPUT
+            echo "is_release=true" >> $GITHUB_OUTPUT
+          elif [[ $GITHUB_REF == refs/heads/develop ]]; then
+            echo "tags=ghcr.io/${{ env.REPO_NAME }}:latest-dev,ghcr.io/${{ env.REPO_NAME }}:dev-${{ github.sha }}" >> $GITHUB_OUTPUT
+            echo "is_develop=true" >> $GITHUB_OUTPUT
+          elif [[ $GITHUB_REF == refs/heads/master ]]; then
+            echo "tags=ghcr.io/${{ env.REPO_NAME }}:latest" >> $GITHUB_OUTPUT
+          else
+            echo "tags=ghcr.io/${{ env.REPO_NAME }}:pr-${{ github.event.number }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy to development
+        if: steps.tags.outputs.is_develop == 'true'
+        run: |
+          echo "Deploying SITL to development environment"
+          curl -X POST "${{ vars.PORTAINER_SITL_WEBHOOK }}"
+
+      - name: Create GitHub Release
+        if: steps.tags.outputs.is_release == 'true'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Aircast SITL v${GITHUB_REF#refs/tags/v}
+          body: |
+            ## Aircast SITL v${GITHUB_REF#refs/tags/v}
+            
+            ### 🚁 Docker Images
+            ```bash
+            docker pull ghcr.io/${{ env.REPO_NAME }}:${GITHUB_REF#refs/tags/v}
+            docker pull ghcr.io/${{ env.REPO_NAME }}:latest
+            ```
+            
+            ### 🏗️ Supported Architectures
+            - linux/amd64 (Intel/AMD x86_64)
+            - linux/arm64 (Apple Silicon, Raspberry Pi)
+            
+            ### 🚀 Quick Start
+            ```bash
+            docker run --rm -it \
+              -p 5760-5765:5760-5765 \
+              -p 14550-14555:14550-14555/udp \
+              -p 9005:9005 \
+              ghcr.io/${{ env.REPO_NAME }}:latest
+            ```
+
+      - name: Build Summary
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "## 🚁 SITL Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "**Event:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Ref:** ${{ github.ref }}" >> $GITHUB_STEP_SUMMARY
+          echo "**SHA:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Platforms:** linux/amd64, linux/arm64" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Images:" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.tags.outputs.tags }}" | tr ',' '\n' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ steps.tags.outputs.is_develop }}" == "true" ]]; then
+            echo "### 🚀 Deployment" >> $GITHUB_STEP_SUMMARY
+            echo "✅ Deployed to development environment" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [[ "${{ steps.tags.outputs.is_release }}" == "true" ]]; then
+            echo "### 🎉 Release" >> $GITHUB_STEP_SUMMARY
+            echo "✅ GitHub release created" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - run: echo "✅ Workflow completed successfully"
