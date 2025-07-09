@@ -80,33 +80,45 @@ RUN python3 -m pip install --no-cache-dir \
 COPY --from=builder /src/build/sitl/bin/arducopter /usr/local/bin/arducopter
 COPY --from=builder /src/Tools/autotest/default_params /usr/local/share/ardupilot/default_params
 
-# Create startup script that handles signals properly
+# Copy web interface
+COPY src/ /var/www/html/
+
+# Create startup script that runs both SITL and web server
 RUN echo '#!/bin/bash\n\
 set -e\n\
 \n\
 # Function to handle shutdown\n\
 shutdown() {\n\
-    echo "Shutting down ArduCopter SITL..."\n\
-    kill -TERM "$child" 2>/dev/null || true\n\
-    wait "$child"\n\
+    echo "Shutting down Aircast SITL..."\n\
+    kill -TERM "$web_pid" 2>/dev/null || true\n\
+    kill -TERM "$sitl_pid" 2>/dev/null || true\n\
+    wait "$web_pid" 2>/dev/null || true\n\
+    wait "$sitl_pid" 2>/dev/null || true\n\
     exit 0\n\
 }\n\
 \n\
 # Set up signal handlers\n\
 trap shutdown SIGTERM SIGINT\n\
 \n\
-# Start ArduCopter in background\n\
-/usr/local/bin/arducopter "$@" &\n\
-child=$!\n\
+# Start web server in background\n\
+cd /var/www/html\n\
+python3 -m http.server 8080 &\n\
+web_pid=$!\n\
+echo "Web interface started on port 8080"\n\
 \n\
-# Wait for the background process\n\
-wait "$child"\n' > /usr/local/bin/start-arducopter.sh \
- && chmod +x /usr/local/bin/start-arducopter.sh
+# Start ArduCopter SITL in background\n\
+/usr/local/bin/arducopter "$@" &\n\
+sitl_pid=$!\n\
+echo "SITL started with PID $sitl_pid"\n\
+\n\
+# Wait for both processes\n\
+wait\n' > /usr/local/bin/start-aircast-sitl.sh \
+ && chmod +x /usr/local/bin/start-aircast-sitl.sh
 
 EXPOSE 5760 5761 5762 5763 5764 5765
 EXPOSE 14550/udp 14551/udp 14552/udp 14553/udp 14554/udp 14555/udp
-EXPOSE 9005
+EXPOSE 9005 8080
 
 # Use the wrapper script as entrypoint
-ENTRYPOINT ["/usr/local/bin/start-arducopter.sh"]
+ENTRYPOINT ["/usr/local/bin/start-aircast-sitl.sh"]
 CMD ["-S","-I0","-M","copter","-s","1","-w","--defaults","/usr/local/share/ardupilot/default_params/copter.parm"]
