@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.3
 # ---
-# Build ArduPilot SITL for ARM64 (Apple Silicon Mac / Raspberry Pi)
+# Build ArduPilot SITL for native architecture
 # Multi-stage to keep final image small
 # ---
 
@@ -65,6 +65,8 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       python3 \
       python3-pip \
+      python3-dev \
+      build-essential \
       socat \
       netcat-openbsd \
       bash \
@@ -102,9 +104,9 @@ trap shutdown SIGTERM SIGINT\n\
 \n\
 # Start web server in background\n\
 cd /var/www/html\n\
-python3 -m http.server 8080 &\n\
+python3 -m http.server 8888 --bind 0.0.0.0 &\n\
 web_pid=$!\n\
-echo "Web interface started on port 8080"\n\
+echo "Web interface started on port 8888"\n\
 \n\
 # Start ArduCopter SITL in background\n\
 /usr/local/bin/arducopter "$@" &\n\
@@ -117,7 +119,7 @@ wait\n' > /usr/local/bin/start-aircast-sitl.sh \
 
 EXPOSE 5760 5761 5762 5763 5764 5765
 EXPOSE 14550/udp 14551/udp 14552/udp 14553/udp 14554/udp 14555/udp
-EXPOSE 9005 8080
+EXPOSE 9005 8888
 
 # Use the wrapper script as entrypoint
 ENTRYPOINT ["/usr/local/bin/start-aircast-sitl.sh"]

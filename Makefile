@@ -12,6 +12,7 @@ CONTAINER_NAME := aircast-sitl
 TCP_PORTS := 5760-5765:5760-5765
 UDP_PORTS := 14550-14555:14550-14555/udp
 FG_PORT := 9005:9005
+WEB_PORT := 8888:8888
 
 help:
 	@echo "Aircast SITL Makefile"
@@ -57,6 +58,7 @@ run:
 	@echo "MAVLink connections:"
 	@echo "  TCP: localhost:5760-5765"
 	@echo "  UDP: localhost:14550-14555"
+	@echo "Web interface: http://localhost:8888"
 	@echo ""
 	@echo "Press Ctrl+C to stop..."
 	docker run --rm -it \
@@ -64,6 +66,7 @@ run:
 		-p $(TCP_PORTS) \
 		-p $(UDP_PORTS) \
 		-p $(FG_PORT) \
+		-p $(WEB_PORT) \
 		$(FULL_IMAGE)
 
 stop:

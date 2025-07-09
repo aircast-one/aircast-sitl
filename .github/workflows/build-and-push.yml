@@ -73,7 +73,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha
@@ -104,7 +104,6 @@ jobs:
             
             ### 🏗️ Supported Architectures
             - linux/amd64 (Intel/AMD x86_64)
-            - linux/arm64 (Apple Silicon, Raspberry Pi)
             
             ### 🚀 Quick Start
             ```bash
@@ -122,7 +121,7 @@ jobs:
           echo "**Event:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
           echo "**Ref:** ${{ github.ref }}" >> $GITHUB_STEP_SUMMARY
           echo "**SHA:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Platforms:** linux/amd64, linux/arm64" >> $GITHUB_STEP_SUMMARY
+          echo "**Platforms:** linux/amd64" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📦 Images:" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
