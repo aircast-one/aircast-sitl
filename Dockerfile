@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1.3
 # ---
-# Build ArduPilot SITL for native architecture
+# Build ArduPilot SITL for universal architecture
 # Multi-stage to keep final image small
 # ---
 
 #################################
 # 1) Builder stage: compile SITL
 #################################
-FROM ubuntu:22.04 AS builder
+FROM --platform=$BUILDPLATFORM ubuntu:22.04 AS builder
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG AP_TAG=Copter-4.5
