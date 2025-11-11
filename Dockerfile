@@ -87,7 +87,6 @@ COPY src/ /var/www/html/
 
 # Create startup script that runs both SITL and web server
 RUN echo '#!/bin/bash\n\
-set -e\n\
 \n\
 # Function to handle shutdown\n\
 shutdown() {\n\
@@ -96,6 +95,7 @@ shutdown() {\n\
     kill -TERM "$sitl_pid" 2>/dev/null || true\n\
     wait "$web_pid" 2>/dev/null || true\n\
     wait "$sitl_pid" 2>/dev/null || true\n\
+    echo "Exitting"\n\
     exit 0\n\
 }\n\
 \n\
@@ -108,13 +108,26 @@ python3 -m http.server 8888 --bind 0.0.0.0 &\n\
 web_pid=$!\n\
 echo "Web interface started on port 8888"\n\
 \n\
-# Start ArduCopter SITL in background\n\
-/usr/local/bin/arducopter "$@" &\n\
-sitl_pid=$!\n\
-echo "SITL started with PID $sitl_pid"\n\
-\n\
-# Wait for both processes\n\
-wait\n' > /usr/local/bin/start-aircast-sitl.sh \
+# Keep SITL running in a loop with restart on crash\n\
+while true; do\n\
+    echo "Starting ArduCopter SITL..."\n\
+    /usr/local/bin/arducopter "$@" &\n\
+    sitl_pid=$!\n\
+    echo "SITL started with PID $sitl_pid"\n\
+    \n\
+    # Wait for SITL process to exit\n\
+    wait $sitl_pid\n\
+    exit_code=$?\n\
+    \n\
+    # Check if we are shutting down (trap was triggered)\n\
+    if [ "$exit_code" -eq 143 ] || [ "$exit_code" -eq 130 ]; then\n\
+        echo "SITL received termination signal, shutting down..."\n\
+        break\n\
+    fi\n\
+    \n\
+    echo "SITL exited with code $exit_code, restarting in 2 seconds..."\n\
+    sleep 2\n\
+done\n' > /usr/local/bin/start-aircast-sitl.sh \
  && chmod +x /usr/local/bin/start-aircast-sitl.sh
 
 EXPOSE 5760 5761 5762 5763 5764 5765
