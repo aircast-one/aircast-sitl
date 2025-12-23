@@ -72,6 +72,7 @@ RUN apt-get update \
       bash \
       procps \
       iproute2 \
+      curl \
  && rm -rf /var/lib/apt/lists/*
 
 # Install minimal Python dependencies for SITL
@@ -85,12 +86,26 @@ COPY --from=builder /src/Tools/autotest/default_params /usr/local/share/ardupilo
 # Copy web interface
 COPY src/ /var/www/html/
 
+# Create health check script for Kubernetes probes
+RUN echo '#!/bin/bash\n\
+# Check if SITL process is running\n\
+if pgrep -x "arducopter" > /dev/null; then\n\
+    echo "OK"\n\
+    exit 0\n\
+else\n\
+    echo "SITL not running"\n\
+    exit 1\n\
+fi\n' > /usr/local/bin/healthcheck.sh \
+ && chmod +x /usr/local/bin/healthcheck.sh
+
 # Create startup script that runs both SITL and web server
 RUN echo '#!/bin/bash\n\
 \n\
 # Function to handle shutdown\n\
 shutdown() {\n\
     echo "Shutting down Aircast SITL..."\n\
+    # Remove health marker\n\
+    rm -f /var/www/html/health 2>/dev/null || true\n\
     kill -TERM "$web_pid" 2>/dev/null || true\n\
     kill -TERM "$sitl_pid" 2>/dev/null || true\n\
     wait "$web_pid" 2>/dev/null || true\n\
@@ -115,9 +130,19 @@ while true; do\n\
     sitl_pid=$!\n\
     echo "SITL started with PID $sitl_pid"\n\
     \n\
+    # Create health marker file after SITL starts (wait for TCP port)\n\
+    sleep 5\n\
+    if pgrep -x "arducopter" > /dev/null; then\n\
+        echo "healthy" > /var/www/html/health\n\
+        echo "Health marker created"\n\
+    fi\n\
+    \n\
     # Wait for SITL process to exit\n\
     wait $sitl_pid\n\
     exit_code=$?\n\
+    \n\
+    # Remove health marker when SITL exits\n\
+    rm -f /var/www/html/health 2>/dev/null || true\n\
     \n\
     # Check if we are shutting down (trap was triggered)\n\
     if [ "$exit_code" -eq 143 ] || [ "$exit_code" -eq 130 ]; then\n\
@@ -133,6 +158,12 @@ done\n' > /usr/local/bin/start-aircast-sitl.sh \
 EXPOSE 5760 5761 5762 5763 5764 5765
 EXPOSE 14550/udp 14551/udp 14552/udp 14553/udp 14554/udp 14555/udp
 EXPOSE 9005 8888
+
+# Docker healthcheck - uses the health file on web server
+# Note: Kubernetes probes should use httpGet on port 8888 path /health
+# instead of tcpSocket on port 5760 to avoid interfering with MAVLink
+HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:8888/health || exit 1
 
 # Use the wrapper script as entrypoint
 ENTRYPOINT ["/usr/local/bin/start-aircast-sitl.sh"]
