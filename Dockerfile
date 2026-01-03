@@ -67,13 +67,26 @@ RUN apt-get update \
       python3-pip \
       python3-dev \
       build-essential \
+      pkg-config \
       socat \
       netcat-openbsd \
       bash \
       procps \
       iproute2 \
       curl \
+      git \
+      meson \
+      ninja-build \
  && rm -rf /var/lib/apt/lists/*
+
+# Build mavlink-router from source for multi-client support
+RUN git clone --depth 1 https://github.com/mavlink-router/mavlink-router.git /tmp/mavlink-router \
+ && cd /tmp/mavlink-router \
+ && git submodule update --init --recursive \
+ && meson setup build . -Dsystemdsystemunitdir= \
+ && ninja -C build \
+ && ninja -C build install \
+ && rm -rf /tmp/mavlink-router
 
 # Install minimal Python dependencies for SITL
 RUN python3 -m pip install --no-cache-dir \
@@ -98,53 +111,64 @@ else\n\
 fi\n' > /usr/local/bin/healthcheck.sh \
  && chmod +x /usr/local/bin/healthcheck.sh
 
-# Create startup script that runs both SITL and web server
+# Create mavlink-router config for multi-client support
+# mavlink-router listens on UDP 14550 for SITL data and serves TCP on 5760
+RUN echo '[General]\n\
+TcpServerPort = 5760\n\
+\n\
+[UdpEndpoint sitl]\n\
+Mode = Server\n\
+Address = 127.0.0.1\n\
+Port = 14550\n' > /etc/mavlink-router.conf
+
+# Create startup script that runs SITL, mavlink-router, and web server
 RUN echo '#!/bin/bash\n\
 \n\
 # Function to handle shutdown\n\
 shutdown() {\n\
     echo "Shutting down Aircast SITL..."\n\
-    # Remove health marker\n\
     rm -f /var/www/html/health 2>/dev/null || true\n\
     kill -TERM "$web_pid" 2>/dev/null || true\n\
+    kill -TERM "$router_pid" 2>/dev/null || true\n\
     kill -TERM "$sitl_pid" 2>/dev/null || true\n\
     wait "$web_pid" 2>/dev/null || true\n\
+    wait "$router_pid" 2>/dev/null || true\n\
     wait "$sitl_pid" 2>/dev/null || true\n\
-    echo "Exitting"\n\
+    echo "Exiting"\n\
     exit 0\n\
 }\n\
 \n\
-# Set up signal handlers\n\
 trap shutdown SIGTERM SIGINT\n\
 \n\
-# Start web server in background\n\
+# Start web server\n\
 cd /var/www/html\n\
 python3 -m http.server 8888 --bind 0.0.0.0 &\n\
 web_pid=$!\n\
 echo "Web interface started on port 8888"\n\
 \n\
-# Keep SITL running in a loop with restart on crash\n\
+# Start mavlink-router (accepts unlimited TCP clients on 5760)\n\
+mavlink-routerd -c /etc/mavlink-router.conf &\n\
+router_pid=$!\n\
+echo "mavlink-router started on TCP port 5760"\n\
+\n\
 while true; do\n\
     echo "Starting ArduCopter SITL..."\n\
-    /usr/local/bin/arducopter "$@" &\n\
+    # SITL SERIAL0 outputs to UDP 14550, mavlink-router forwards to TCP clients\n\
+    /usr/local/bin/arducopter "$@" --serial0 udpclient:127.0.0.1:14550 &\n\
     sitl_pid=$!\n\
     echo "SITL started with PID $sitl_pid"\n\
     \n\
-    # Create health marker file after SITL starts (wait for TCP port)\n\
     sleep 5\n\
     if pgrep -x "arducopter" > /dev/null; then\n\
         echo "healthy" > /var/www/html/health\n\
         echo "Health marker created"\n\
     fi\n\
     \n\
-    # Wait for SITL process to exit\n\
     wait $sitl_pid\n\
     exit_code=$?\n\
     \n\
-    # Remove health marker when SITL exits\n\
     rm -f /var/www/html/health 2>/dev/null || true\n\
     \n\
-    # Check if we are shutting down (trap was triggered)\n\
     if [ "$exit_code" -eq 143 ] || [ "$exit_code" -eq 130 ]; then\n\
         echo "SITL received termination signal, shutting down..."\n\
         break\n\
