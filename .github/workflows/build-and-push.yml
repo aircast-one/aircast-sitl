@@ -32,6 +32,10 @@ jobs:
       packages: write
       id-token: write
 
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      environment: ${{ github.ref == 'refs/heads/develop' && 'development' || 'production' }}
+
     env:
       IMAGE_BASE: ${{ github.repository }}
 
@@ -54,20 +58,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.PAT_TOKEN }}
 
-      - name: Determine tags
-        id: tags
+      - name: Generate version
+        id: version
         run: |
+          SHORT_SHA=${GITHUB_SHA::7}
           if [[ $GITHUB_REF == refs/tags/v* ]]; then
-            VERSION=${GITHUB_REF#refs/tags/v}
-            echo "tags=ghcr.io/${{ env.REPO_NAME }}:${VERSION},ghcr.io/${{ env.REPO_NAME }}:latest" >> $GITHUB_OUTPUT
+            VERSION=${GITHUB_REF#refs/tags/}
+            echo "version=${VERSION}-${SHORT_SHA}" >> $GITHUB_OUTPUT
             echo "is_release=true" >> $GITHUB_OUTPUT
           elif [[ $GITHUB_REF == refs/heads/develop ]]; then
-            echo "tags=ghcr.io/${{ env.REPO_NAME }}:latest-dev,ghcr.io/${{ env.REPO_NAME }}:dev-${{ github.sha }}" >> $GITHUB_OUTPUT
+            echo "version=v0.0.0-dev-${SHORT_SHA}" >> $GITHUB_OUTPUT
             echo "is_develop=true" >> $GITHUB_OUTPUT
           elif [[ $GITHUB_REF == refs/heads/master ]]; then
-            echo "tags=ghcr.io/${{ env.REPO_NAME }}:latest" >> $GITHUB_OUTPUT
+            echo "version=v0.0.0-${SHORT_SHA}" >> $GITHUB_OUTPUT
           else
-            echo "tags=ghcr.io/${{ env.REPO_NAME }}:pr-${{ github.event.number }}" >> $GITHUB_OUTPUT
+            echo "version=pr-${{ github.event.number }}-${SHORT_SHA}" >> $GITHUB_OUTPUT
           fi
 
       - name: Build and push Docker image
@@ -76,67 +81,64 @@ jobs:
           context: .
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.tags.outputs.tags }}
+          tags: |
+            ghcr.io/${{ env.REPO_NAME }}:${{ steps.version.outputs.version }}
+            ghcr.io/${{ env.REPO_NAME }}:${{ steps.version.outputs.is_develop == 'true' && 'latest-dev' || steps.version.outputs.is_release == 'true' && 'latest' || 'pr' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Deploy to development
-        if: steps.tags.outputs.is_develop == 'true'
-        run: |
-          echo "Deploying SITL to development environment"
-          curl -X POST "${{ vars.PORTAINER_SITL_WEBHOOK }}"
-
       - name: Create GitHub Release
-        if: steps.tags.outputs.is_release == 'true'
+        if: steps.version.outputs.is_release == 'true'
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
         with:
           tag_name: ${{ github.ref }}
-          release_name: Aircast SITL v${GITHUB_REF#refs/tags/v}
+          release_name: Aircast SITL ${{ github.ref_name }}
           body: |
-            ## Aircast SITL v${GITHUB_REF#refs/tags/v}
-            
-            ### 🚁 Docker Images
+            ## Aircast SITL ${{ github.ref_name }}
+
+            ### Docker Images
             ```bash
-            docker pull ghcr.io/${{ env.REPO_NAME }}:${GITHUB_REF#refs/tags/v}
+            docker pull ghcr.io/${{ env.REPO_NAME }}:${{ steps.version.outputs.version }}
             docker pull ghcr.io/${{ env.REPO_NAME }}:latest
-            ```
-            
-            ### 🏗️ Supported Architectures
-            - linux/amd64 (Intel/AMD x86_64)
-            
-            ### 🚀 Quick Start
-            ```bash
-            docker run --rm -it \
-              -p 5760-5765:5760-5765 \
-              -p 14550-14555:14550-14555/udp \
-              -p 9005:9005 \
-              ghcr.io/${{ env.REPO_NAME }}:latest
             ```
 
       - name: Build Summary
         if: github.event_name != 'pull_request'
         run: |
           echo "## 🚁 SITL Build Summary" >> $GITHUB_STEP_SUMMARY
-          echo "**Event:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "**Ref:** ${{ github.ref }}" >> $GITHUB_STEP_SUMMARY
-          echo "**SHA:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Platforms:** linux/amd64" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📦 Images:" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Image:" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "${{ steps.tags.outputs.tags }}" | tr ',' '\n' >> $GITHUB_STEP_SUMMARY
+          echo "ghcr.io/${{ env.REPO_NAME }}:${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          
-          if [[ "${{ steps.tags.outputs.is_develop }}" == "true" ]]; then
-            echo "### 🚀 Deployment" >> $GITHUB_STEP_SUMMARY
-            echo "✅ Deployed to development environment" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          if [[ "${{ steps.tags.outputs.is_release }}" == "true" ]]; then
-            echo "### 🎉 Release" >> $GITHUB_STEP_SUMMARY
-            echo "✅ GitHub release created" >> $GITHUB_STEP_SUMMARY
-          fi
 
-      - run: echo "✅ Workflow completed successfully"
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: ${{ !cancelled() && needs.build.result == 'success' && github.ref == 'refs/heads/develop' }}
+
+    steps:
+      - name: Trigger GitOps update
+        run: |
+          echo "📡 Triggering GitOps repository update..."
+
+          curl -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
+            https://api.github.com/repos/aircast-one/aircast-gitops/dispatches \
+            -d '{
+              "event_type": "update-image",
+              "client_payload": {
+                "app_name": "aircast-sitl",
+                "environment": "${{ needs.build.outputs.environment }}",
+                "image_tag": "${{ needs.build.outputs.version }}"
+              }
+            }'
+
+          echo "✅ GitOps update triggered for aircast-sitl"
+          echo "Environment: ${{ needs.build.outputs.environment }}"
+          echo "Image: ghcr.io/${{ github.repository }}:${{ needs.build.outputs.version }}"
