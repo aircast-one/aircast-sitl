@@ -108,9 +108,29 @@ python3 -m http.server 8888 --bind 0.0.0.0 &\n\
 web_pid=$!\n\
 echo "Web interface started on port 8888"\n\
 \n\
+# Allow model override via SITL_MODEL env var (e.g. JSON:gazebo for Gazebo)\n\
+if [ -n "$SITL_MODEL" ]; then\n\
+    echo "Using model from SITL_MODEL=$SITL_MODEL"\n\
+    # Replace -M arg in CMD args\n\
+    ARGS=()\n\
+    SKIP_NEXT=false\n\
+    for arg in "$@"; do\n\
+        if $SKIP_NEXT; then\n\
+            SKIP_NEXT=false\n\
+            continue\n\
+        fi\n\
+        if [ "$arg" = "-M" ]; then\n\
+            SKIP_NEXT=true\n\
+            continue\n\
+        fi\n\
+        ARGS+=("$arg")\n\
+    done\n\
+    set -- "${ARGS[@]}" "-M" "$SITL_MODEL"\n\
+fi\n\
+\n\
 # Keep SITL running in a loop with restart on crash\n\
 while true; do\n\
-    echo "Starting ArduCopter SITL..."\n\
+    echo "Starting ArduCopter SITL with args: $@"\n\
     /usr/local/bin/arducopter "$@" &\n\
     sitl_pid=$!\n\
     echo "SITL started with PID $sitl_pid"\n\
