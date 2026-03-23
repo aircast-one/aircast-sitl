@@ -84,6 +84,8 @@ jobs:
           tags: |
             ghcr.io/${{ env.REPO_NAME }}:${{ steps.version.outputs.version }}
             ghcr.io/${{ env.REPO_NAME }}:${{ steps.version.outputs.is_develop == 'true' && 'latest-dev' || steps.version.outputs.is_release == 'true' && 'latest' || 'pr' }}
+          build-args: |
+            VITE_CESIUM_ION_TOKEN=${{ vars.VITE_CESIUM_ION_TOKEN }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

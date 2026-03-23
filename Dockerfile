@@ -59,6 +59,9 @@ RUN --mount=type=cache,id=ccache,target=/root/.ccache \
 #################################
 FROM node:22-alpine AS frontend
 
+ARG VITE_CESIUM_ION_TOKEN=""
+ENV VITE_CESIUM_ION_TOKEN=$VITE_CESIUM_ION_TOKEN
+
 WORKDIR /app
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
