@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button.tsx";
 
 const LERP = 0.1;
 const MODEL_URL = "/models/drone.glb";
+const GROUND_CLEARANCE_M = 0.5;
 
 export function FpvPage() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -94,7 +95,6 @@ export function FpvPage() {
       if (!viewer || viewer.isDestroyed()) return;
 
       const t = telemetryRef.current;
-      const s = smoothRef.current;
 
       if (t.lat !== 0 || t.lng !== 0) {
         s.lat += (t.lat - s.lat) * LERP;
@@ -105,7 +105,7 @@ export function FpvPage() {
         viewer.scene.globe.getHeight(
           Cartographic.fromDegrees(s.lng, s.lat),
         ) ?? 0;
-      const targetAlt = terrainHeight + t.relativeAlt + 0.5;
+      const targetAlt = terrainHeight + t.relativeAlt + GROUND_CLEARANCE_M;
       s.alt += (targetAlt - s.alt) * LERP;
 
       s.roll += (t.roll - s.roll) * LERP;
@@ -120,10 +120,12 @@ export function FpvPage() {
       const transform = Transforms.eastNorthUpToFixedFrame(position);
 
       if (initialized) {
-        // Preserve user's orbit offset
+        // Preserve user's orbit offset (camera position is in local ENU frame after lookAtTransform)
         camHeading = viewer.camera.heading;
         camPitch = viewer.camera.pitch;
-        camRange = Cartesian3.magnitude(viewer.camera.position);
+        camRange = Cartesian3.magnitude(
+          Cartesian3.subtract(viewer.camera.positionWC, position, new Cartesian3()),
+        );
       }
 
       viewer.camera.lookAtTransform(

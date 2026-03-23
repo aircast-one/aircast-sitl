@@ -17,7 +17,7 @@ class SITLHandler(SimpleHTTPRequestHandler):
             return
         # Serve static files if they exist, otherwise fall back to index.html
         path = self.translate_path(self.path)
-        if not os.path.exists(path) or os.path.isdir(path) and not os.path.exists(os.path.join(path, "index.html")):
+        if not os.path.exists(path) or (os.path.isdir(path) and not os.path.exists(os.path.join(path, "index.html"))):
             self.path = "/index.html"
         super().do_GET()
 
