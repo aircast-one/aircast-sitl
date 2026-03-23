@@ -31,7 +31,7 @@ class SITLHandler(SimpleHTTPRequestHandler):
         """Kill ArduCopter process to trigger restart via the startup script loop."""
         try:
             result = subprocess.run(
-                ["killall", "arducopter"],
+                ["pkill", "-x", "arducopter"],
                 capture_output=True,
                 text=True,
             )
