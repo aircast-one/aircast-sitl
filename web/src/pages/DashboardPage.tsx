@@ -1,5 +1,17 @@
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { useTelemetry } from "../hooks/useTelemetry.ts";
+import { Copy, ExternalLink, RotateCcw } from "lucide-react";
+import { useTelemetry } from "@/hooks/useTelemetry.ts";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card.tsx";
+import { Badge } from "@/components/ui/badge.tsx";
+import { Button } from "@/components/ui/button.tsx";
+import { cn } from "@/lib/utils.ts";
 
 const connections = [
   {
@@ -22,79 +34,146 @@ const connections = [
 
 export function DashboardPage() {
   const telemetry = useTelemetry();
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const sawDisconnect = useRef(false);
+
+  const handleReset = async () => {
+    setResetting(true);
+    setResetError(null);
+    try {
+      const res = await fetch("/api/reset", { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json();
+        setResetError(data.error ?? "Reset failed");
+        setResetting(false);
+      }
+    } catch {
+      setResetError("Network error");
+      setResetting(false);
+    }
+  };
+
+  // Clear resetting when telemetry drops then reconnects after reset
+  useEffect(() => {
+    if (!resetting) {
+      sawDisconnect.current = false;
+      return;
+    }
+    if (!telemetry.connected) {
+      sawDisconnect.current = true;
+    }
+    if (sawDisconnect.current && telemetry.connected) {
+      setResetting(false);
+    }
+  }, [resetting, telemetry.connected]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-500 to-purple-700 text-white">
+    <div className="min-h-screen bg-background text-foreground">
       <div className="max-w-3xl mx-auto px-8 py-12 text-center">
-        <h1 className="text-5xl font-bold mb-3 drop-shadow-md">
+        <h1 className="text-5xl font-bold mb-3 tracking-tight">
           Aircast SITL
         </h1>
-        <p className="text-lg opacity-90 mb-10">
+        <p className="text-lg text-muted-foreground mb-10">
           ArduPilot Software-in-the-Loop Simulator
         </p>
 
         {/* Status */}
-        <div className="bg-white/10 backdrop-blur rounded-xl p-6 mb-8 border border-white/20">
-          <h2 className="text-xl font-semibold flex items-center justify-center gap-2">
-            <span
-              className={`w-3 h-3 rounded-full ${telemetry.connected ? "bg-green-400 shadow-[0_0_10px_rgba(74,222,128,0.5)]" : "bg-red-400 shadow-[0_0_10px_rgba(248,113,113,0.5)]"}`}
-            />
-            SITL Status: {telemetry.connected ? "Connected" : "Disconnected"}
-          </h2>
-          <p className="mt-1 opacity-80">
-            {telemetry.connected
-              ? "ArduCopter SITL is active and ready for connections"
-              : "Waiting for SITL connection..."}
-          </p>
-        </div>
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="flex items-center justify-center gap-2 text-xl">
+              <span
+                className={cn(
+                  "w-3 h-3 rounded-full",
+                  telemetry.connected
+                    ? "bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]"
+                    : "bg-destructive shadow-[0_0_10px_rgba(239,68,68,0.5)]",
+                )}
+              />
+              SITL Status:{" "}
+              {telemetry.connected ? "Connected" : "Disconnected"}
+            </CardTitle>
+            <CardDescription>
+              {telemetry.connected
+                ? "ArduCopter SITL is active and ready for connections"
+                : "Waiting for SITL connection..."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleReset}
+              disabled={resetting}
+            >
+              <RotateCcw className={cn("h-4 w-4", resetting && "animate-spin")} />
+              {resetting ? "Resetting..." : "Reset SITL"}
+            </Button>
+            {resetError && (
+              <p className="text-xs text-destructive">{resetError}</p>
+            )}
+          </CardContent>
+        </Card>
 
         {/* FPV Card */}
-        <Link
-          to="/fpv"
-          className="block bg-white/10 backdrop-blur rounded-xl p-6 mb-8 border border-white/20 hover:bg-white/20 transition-colors cursor-pointer"
-        >
-          <h3 className="text-amber-300 font-bold mb-2">3D FPV View</h3>
-          <p className="text-sm opacity-90 font-mono">
-            Open the CesiumJS 3D drone view
-            <br />
-            with live MAVLink telemetry overlay
-          </p>
-        </Link>
+        <Card className="mb-8 hover:bg-accent/50 transition-colors">
+          <Link to="/fpv" className="block">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-center gap-2">
+                <ExternalLink className="h-4 w-4" />
+                3D FPV View
+              </CardTitle>
+              <CardDescription className="font-mono">
+                Open the CesiumJS 3D drone view
+                <br />
+                with live MAVLink telemetry overlay
+              </CardDescription>
+            </CardHeader>
+          </Link>
+        </Card>
 
         {/* Connection Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
           {connections.map((c) => (
-            <button
+            <Card
               key={c.title}
+              className="text-left hover:bg-accent/50 transition-colors cursor-pointer"
               onClick={() => navigator.clipboard.writeText(c.info)}
-              className="bg-white/10 backdrop-blur rounded-lg p-5 border border-white/20 text-left hover:bg-green-400/10 transition-colors cursor-pointer"
             >
-              <h3 className="text-amber-300 font-bold mb-2">{c.title}</h3>
-              <pre className="text-xs opacity-90 font-mono whitespace-pre-wrap">
-                {c.info}
-              </pre>
-            </button>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Copy className="h-3 w-3 text-muted-foreground" />
+                  {c.title}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <pre className="text-xs text-muted-foreground font-mono whitespace-pre-wrap">
+                  {c.info}
+                </pre>
+              </CardContent>
+            </Card>
           ))}
         </div>
 
         {/* Ports */}
-        <div className="bg-white/10 backdrop-blur rounded-xl p-6 border border-white/20 mb-8">
-          <h3 className="font-semibold mb-3">Available Ports</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {["TCP: 5760-5765", "UDP: 14550-14555", "FlightGear: 9005"].map(
-              (port) => (
-                <div
-                  key={port}
-                  className="bg-white/5 rounded-md py-2 px-3 font-mono text-sm"
-                >
-                  {port}
-                </div>
-              ),
-            )}
-          </div>
-        </div>
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="text-sm">Available Ports</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap justify-center gap-2">
+              {["TCP: 5760-5765", "UDP: 14550-14555", "FlightGear: 9005"].map(
+                (port) => (
+                  <Badge key={port} variant="secondary" className="font-mono">
+                    {port}
+                  </Badge>
+                ),
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
-        <p className="opacity-60 text-sm">
+        <p className="text-sm text-muted-foreground">
           Aircast SITL &mdash; Multi-Architecture ArduPilot Simulator
         </p>
       </div>

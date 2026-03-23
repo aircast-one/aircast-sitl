@@ -14,9 +14,10 @@ import {
   Cartesian2,
   LabelStyle,
 } from "cesium";
-import { useTelemetry } from "../hooks/useTelemetry.ts";
-import { useCesiumViewer, type MapLayer } from "../hooks/useCesiumViewer.ts";
-import { Hud } from "../components/Hud.tsx";
+import { useTelemetry } from "@/hooks/useTelemetry.ts";
+import { useCesiumViewer, type MapLayer } from "@/hooks/useCesiumViewer.ts";
+import { Hud } from "@/components/Hud.tsx";
+import { Button } from "@/components/ui/button.tsx";
 
 const LERP = 0.1;
 const MODEL_URL = "/models/drone.glb";
@@ -152,22 +153,21 @@ export function FpvPage() {
       <div ref={containerRef} className="w-full h-full" />
 
       <div className="fixed top-4 left-1/2 -translate-x-1/2 z-20 flex gap-2">
-        <Link
-          to="/"
-          className="bg-black/60 text-green-400 border border-green-400/30 px-4 py-1.5 rounded font-mono text-xs hover:bg-green-400/10 transition-colors"
-        >
-          SITL Dashboard
-        </Link>
-        <button
+        <Button variant="outline" size="sm" className="bg-background/60 font-mono text-xs" asChild>
+          <Link to="/">SITL Dashboard</Link>
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="bg-background/60 font-mono text-xs"
           onClick={() => {
             const next = layer === "satellite" ? "map" : "satellite";
             setLayer(next);
             setLayerState(next);
           }}
-          className="bg-black/60 text-green-400 border border-green-400/30 px-4 py-1.5 rounded font-mono text-xs hover:bg-green-400/10 transition-colors cursor-pointer"
         >
           {layer === "satellite" ? "MAP" : "SAT"}
-        </button>
+        </Button>
       </div>
 
       <Hud telemetry={telemetry} />

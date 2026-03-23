@@ -110,8 +110,12 @@ export function useTelemetry() {
   }, []);
 
   const connect = useCallback(() => {
+    const isSecure = window.location.protocol === "https:";
     const wsHost = window.location.hostname || "localhost";
-    const ws = new WebSocket(`ws://${wsHost}:8889`);
+    const wsUrl = isSecure
+      ? `wss://${wsHost}/ws`
+      : `ws://${wsHost}:8889`;
+    const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {

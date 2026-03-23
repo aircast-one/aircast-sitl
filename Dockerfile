@@ -90,7 +90,7 @@ RUN apt-get update \
  && git clone --depth 1 https://github.com/mavlink-router/mavlink-router.git /tmp/mavlink-router \
  && cd /tmp/mavlink-router \
  && git submodule update --init --recursive --depth 1 \
- && meson setup build . \
+ && meson setup build . -Dsystemdsystemunitdir=/usr/lib/systemd/system \
  && ninja -C build \
  && ninja -C build install \
  && rm -rf /tmp/mavlink-router \

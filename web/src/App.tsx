@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { DashboardPage } from "./pages/DashboardPage.tsx";
-import { FpvPage } from "./pages/FpvPage.tsx";
+import { DashboardPage } from "@/pages/DashboardPage.tsx";
+import { FpvPage } from "@/pages/FpvPage.tsx";
 
 export default function App() {
   return (

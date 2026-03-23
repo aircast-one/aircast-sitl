@@ -6,12 +6,12 @@ export default defineConfig({
   retries: 1,
   workers: 1,
   use: {
-    baseURL: "http://localhost:5173",
+    baseURL: "http://localhost:5174",
     headless: true,
   },
   webServer: {
     command: "npm run dev",
-    url: "http://localhost:5173",
+    url: "http://localhost:5174",
     reuseExistingServer: true,
     timeout: 30_000,
   },

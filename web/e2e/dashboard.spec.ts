@@ -55,7 +55,6 @@ test.describe("Dashboard Page", () => {
 
     await page
       .getByRole("heading", { name: "MAVProxy" })
-      .locator("..")
       .click();
 
     const clipboardText = await page.evaluate(() =>
