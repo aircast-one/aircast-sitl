@@ -69,7 +69,7 @@ def connect_mavlink(host, port):
             print(f'Connected to MAVLink at tcp:{host}:{port} (sysid={conn.target_system})')
             conn.mav.request_data_stream_send(
                 conn.target_system, conn.target_component,
-                mavutil.mavlink.MAV_DATA_STREAM_ALL, 4, 1
+                mavutil.mavlink.MAV_DATA_STREAM_ALL, 10, 1
             )
             print('Requested MAVLink data streams')
             return conn

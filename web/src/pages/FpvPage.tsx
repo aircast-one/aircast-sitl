@@ -3,13 +3,13 @@ import { Link } from "react-router-dom";
 import {
   Cartesian3,
   Cartographic,
+  ConstantPositionProperty,
+  ConstantProperty,
   HeadingPitchRoll,
   HeadingPitchRange,
   Math as CesiumMath,
   Transforms,
-  CallbackProperty,
   Entity,
-  Quaternion,
   Color,
   Cartesian2,
   LabelStyle,
@@ -46,20 +46,13 @@ export function FpvPage() {
 
     const s = smoothRef.current;
 
-    const positionProperty = new CallbackProperty(() => {
-      return Cartesian3.fromDegrees(s.lng, s.lat, s.alt);
-    }, false);
-
-    const orientationProperty = new CallbackProperty(() => {
-      const heading = s.yaw >= 0 ? s.yaw : s.yaw + 2 * Math.PI;
-      const hpr = new HeadingPitchRoll(heading, s.pitch, s.roll);
-      const position = Cartesian3.fromDegrees(s.lng, s.lat, s.alt);
-      return Transforms.headingPitchRollQuaternion(position, hpr);
-    }, false) as unknown as CallbackProperty & Quaternion;
-
+    const initialPos = Cartesian3.fromDegrees(s.lng, s.lat, s.alt);
     const entity = viewer.entities.add({
-      position: positionProperty as unknown as Cartesian3,
-      orientation: orientationProperty,
+      position: initialPos,
+      orientation: Transforms.headingPitchRollQuaternion(
+        initialPos,
+        new HeadingPitchRoll(0, 0, 0),
+      ),
       model: {
         uri: MODEL_URL,
         minimumPixelSize: 64,
@@ -117,6 +110,15 @@ export function FpvPage() {
       s.yaw += yawDiff * LERP;
 
       const position = Cartesian3.fromDegrees(s.lng, s.lat, s.alt);
+
+      // Directly update entity position and orientation each frame
+      const heading = s.yaw >= 0 ? s.yaw : s.yaw + 2 * Math.PI;
+      const hpr = new HeadingPitchRoll(heading, s.pitch, s.roll);
+      entity.position = new ConstantPositionProperty(position);
+      entity.orientation = new ConstantProperty(
+        Transforms.headingPitchRollQuaternion(position, hpr),
+      );
+
       const transform = Transforms.eastNorthUpToFixedFrame(position);
 
       if (initialized) {
