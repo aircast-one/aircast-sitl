@@ -47,12 +47,13 @@ export function FpvPage() {
     const s = smoothRef.current;
 
     const initialPos = Cartesian3.fromDegrees(s.lng, s.lat, s.alt);
+    const positionProp = new ConstantPositionProperty(initialPos);
+    const orientationProp = new ConstantProperty(
+      Transforms.headingPitchRollQuaternion(initialPos, new HeadingPitchRoll(0, 0, 0)),
+    );
     const entity = viewer.entities.add({
-      position: initialPos,
-      orientation: Transforms.headingPitchRollQuaternion(
-        initialPos,
-        new HeadingPitchRoll(0, 0, 0),
-      ),
+      position: positionProp as unknown as Cartesian3,
+      orientation: orientationProp,
       model: {
         uri: MODEL_URL,
         minimumPixelSize: 64,
@@ -111,13 +112,11 @@ export function FpvPage() {
 
       const position = Cartesian3.fromDegrees(s.lng, s.lat, s.alt);
 
-      // Directly update entity position and orientation each frame
+      // Update entity position and orientation via existing properties (no allocations)
       const heading = s.yaw >= 0 ? s.yaw : s.yaw + 2 * Math.PI;
       const hpr = new HeadingPitchRoll(heading, s.pitch, s.roll);
-      entity.position = new ConstantPositionProperty(position);
-      entity.orientation = new ConstantProperty(
-        Transforms.headingPitchRollQuaternion(position, hpr),
-      );
+      positionProp.setValue(position);
+      orientationProp.setValue(Transforms.headingPitchRollQuaternion(position, hpr));
 
       const transform = Transforms.eastNorthUpToFixedFrame(position);
 
