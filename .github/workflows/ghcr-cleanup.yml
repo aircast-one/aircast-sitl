@@ -1,0 +1,22 @@
+name: GHCR Cleanup
+
+on:
+  schedule:
+    - cron: '0 3 * * 0' # Weekly on Sunday at 3am UTC
+  workflow_dispatch:
+
+permissions:
+  packages: write
+
+jobs:
+  cleanup:
+    runs-on: self-hosted
+    steps:
+      - name: Delete untagged container images
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: aircast-sitl
+          package-type: container
+          min-versions-to-keep: 10
+          delete-only-untagged-versions: true
+          token: ${{ secrets.GITHUB_TOKEN }}
