@@ -30,6 +30,12 @@ RUN apt-get update \
           /usr/share/dbus-1/system-services/org.freedesktop.ModemManager1.service \
  && mkdir -p /run/dbus
 
+# EXTERNAL auth requires the connecting uid to exist in /etc/passwd. The
+# aircast-agent container runs as uid 1000; create a matching user here so
+# godbus (which only attempts EXTERNAL) can authenticate. -m / -s are
+# defensive defaults; the user never logs in.
+RUN useradd -u 1000 -m -s /bin/bash aircast
+
 # We do not pip-install our package. Trixie's python3 is PEP-668 externally
 # managed; rather than carry a venv just for one in-tree module, we drop the
 # package onto PYTHONPATH. The package has no third-party runtime imports
