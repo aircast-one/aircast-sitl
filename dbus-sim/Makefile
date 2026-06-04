@@ -20,7 +20,7 @@ run:
 	docker run --rm --name $(NAME) -d $(IMAGE):$(TAG)
 	@echo "waiting for sim to become ready..."
 	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do \
-		if docker logs $(NAME) 2>&1 | grep -q '"ready": true'; then \
+		if docker logs $(NAME) 2>&1 | grep -q '"phase": 1'; then \
 			echo "sim is ready"; \
 			docker ps --filter "name=$(NAME)" --format '{{.ID}}'; \
 			exit 0; \

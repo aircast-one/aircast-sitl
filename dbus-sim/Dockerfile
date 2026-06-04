@@ -17,6 +17,11 @@ FROM debian:trixie-slim
 # .service files so dbus-daemon won't try to auto-activate the real
 # binaries when a client looks up the well-known name. (See design doc
 # /docs/simulators.md, "Container blueprint" -> "Pitfalls".)
+#
+# EXTERNAL auth requires the connecting uid to exist in /etc/passwd. The
+# aircast-agent container runs as uid 1000; create a matching user here so
+# godbus (which only attempts EXTERNAL) can authenticate. -m / -s are
+# defensive defaults; the user never logs in.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
         bash \
@@ -28,13 +33,8 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && rm -f /usr/share/dbus-1/system-services/org.freedesktop.NetworkManager.service \
           /usr/share/dbus-1/system-services/org.freedesktop.ModemManager1.service \
- && mkdir -p /run/dbus
-
-# EXTERNAL auth requires the connecting uid to exist in /etc/passwd. The
-# aircast-agent container runs as uid 1000; create a matching user here so
-# godbus (which only attempts EXTERNAL) can authenticate. -m / -s are
-# defensive defaults; the user never logs in.
-RUN useradd -u 1000 -m -s /bin/bash aircast
+ && mkdir -p /run/dbus \
+ && useradd -u 1000 -m -s /bin/bash aircast
 
 # We do not pip-install our package. Trixie's python3 is PEP-668 externally
 # managed; rather than carry a venv just for one in-tree module, we drop the
@@ -48,6 +48,9 @@ COPY tests       /opt/tests
 COPY conf/aircast-sim-bus.conf /etc/dbus-1/aircast-sim-bus.conf
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
+
+HEALTHCHECK --interval=2s --timeout=2s --retries=10 \
+  CMD test -S /run/dbus/system_bus_socket || exit 1
 
 LABEL org.opencontainers.image.source="https://github.com/aircast-one/aircast-sitl" \
       org.opencontainers.image.description="aircast D-Bus simulator (Phase 1: skeleton)"

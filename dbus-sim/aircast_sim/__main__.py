@@ -18,6 +18,7 @@ import importlib
 import json
 import logging
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -25,8 +26,11 @@ import threading
 from typing import Optional
 
 import dbusmock
+from dbus.proxies import ProxyObject
 
 LOG = logging.getLogger("aircast_sim")
+
+_SCENARIO_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 # Block forever in main() until a signal handler trips this event. We don't
 # use signal.pause() because we want a clean way to share the event with
@@ -57,13 +61,12 @@ def _install_signal_handlers() -> None:
     signal.signal(signal.SIGINT, _handle)
 
 
-def _start_bus() -> str:
-    """Return the bus address.
+def _resolve_bus_address() -> str:
+    """Read the bus address from the environment.
 
-    Phase 1 spawned a private bus via dbusmock.DBusTestCase.start_system_bus()
-    at a random /tmp path. For sidecar use the entrypoint launches dbus-daemon
-    itself at unix:path=/run/dbus/system_bus_socket and exports the address via
-    DBUS_SYSTEM_BUS_ADDRESS. We just verify the env var is set.
+    The entrypoint script launches dbus-daemon at a stable path and
+    exports DBUS_SYSTEM_BUS_ADDRESS before invoking this module. This
+    function only validates that the env var is set.
     """
     addr = os.environ.get("DBUS_SYSTEM_BUS_ADDRESS")
     if not addr:
@@ -74,7 +77,7 @@ def _start_bus() -> str:
     return addr
 
 
-def _spawn_template(name: str) -> tuple[subprocess.Popen, object]:
+def _spawn_template(name: str) -> tuple[subprocess.Popen, ProxyObject]:
     """Spawn a python-dbusmock template against the running system bus.
 
     Returns the (process, mock_proxy) tuple. The proxy is a ``dbus.proxies``
@@ -124,10 +127,18 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     args = _parse_args(argv)
 
+    if not _SCENARIO_NAME_RE.fullmatch(args.scenario):
+        LOG.error(
+            "invalid scenario name %r; must match %s",
+            args.scenario,
+            _SCENARIO_NAME_RE.pattern,
+        )
+        return 2
+
     _install_signal_handlers()
 
-    bus_address = _start_bus()
-    LOG.info("system bus up at %s", bus_address)
+    bus_address = _resolve_bus_address()
+    LOG.info("bus address: %s", bus_address)
 
     nm_proc: Optional[subprocess.Popen] = None
     mm_proc: Optional[subprocess.Popen] = None
@@ -166,7 +177,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 LOG.warning("%s did not exit cleanly, killing", label)
                 proc.kill()
                 proc.wait(timeout=5)
-            except Exception as exc:  # noqa: BLE001 — cleanup, log and move on
+            except (OSError, ProcessLookupError) as exc:
                 LOG.warning("error terminating %s: %s", label, exc)
 
 

@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "aircast D-Bus simulator (Phase 1 skeleton)"
 requires-python = ">=3.11"
 dependencies = [
-    "python-dbusmock>=0.30",
+    "python-dbusmock>=0.30,<2.0",
 ]
 
 [tool.setuptools.packages.find]

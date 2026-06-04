@@ -50,11 +50,16 @@ Until Phase 6 the image is local-only — there's no published GHCR tag.
 ## Implementation notes
 
 - Tooling: [python-dbusmock](https://github.com/martinpitt/python-dbusmock)
-  templates for NM and MM. Templates are loaded in-process via
-  `dbusmock.DBusTestCase.start_system_bus()` +
-  `spawn_server_template(...)`, which spawns a private `dbus-daemon`
-  for the container's lifetime. The bus address is published to the
-  process environment as `DBUS_SYSTEM_BUS_ADDRESS`.
+  templates for NM and MM.
+- `dbus-daemon` is launched by the container's entrypoint at the stable
+  path `unix:path=/run/dbus/system_bus_socket`. The address is exported
+  as `DBUS_SYSTEM_BUS_ADDRESS` so the sim's Python process and any
+  sidecar consumer share the same bus.
+- Bus auth accepts both `EXTERNAL` and `ANONYMOUS`. EXTERNAL is what
+  godbus (used by aircast-agent) negotiates; ANONYMOUS is the fallback
+  for python-dbus and other clients. The image creates a uid-1000
+  `aircast` user so EXTERNAL succeeds when the agent connects as its
+  default uid.
 - The container removes Debian's bundled
   `org.freedesktop.NetworkManager.service` and
   `org.freedesktop.ModemManager1.service` so the bus doesn't try to

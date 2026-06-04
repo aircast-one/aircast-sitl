@@ -33,34 +33,14 @@ NM_DEVICE_TYPE_WIFI = 2
 def _connect_bus() -> dbus.SystemBus:
     """Resolve the system bus.
 
-    ``docker exec`` doesn't inherit ``DBUS_SYSTEM_BUS_ADDRESS`` from the
-    sim process, and the env block of the entry-point Python process
-    captured by ``/proc/<pid>/environ`` reflects exec(2) time only — it
-    doesn't update when ``start_system_bus`` mutates ``os.environ``.
-    The dbusmock template subprocesses *do* inherit the mutated env via
-    fork, so we scan ``/proc/<pid>/environ`` for them and pick whichever
-    bus address shows up first.
+    The container's entrypoint exports DBUS_SYSTEM_BUS_ADDRESS at a fixed
+    path. docker exec doesn't inherit process env vars, so set it here
+    defensively.
     """
-    if not os.environ.get("DBUS_SYSTEM_BUS_ADDRESS"):
-        for pid_dir in sorted(os.listdir("/proc")):
-            if not pid_dir.isdigit():
-                continue
-            try:
-                with open(f"/proc/{pid_dir}/environ", "rb") as f:
-                    blob = f.read()
-            except (FileNotFoundError, PermissionError):
-                continue
-            for entry in blob.split(b"\x00"):
-                if entry.startswith(b"DBUS_SYSTEM_BUS_ADDRESS="):
-                    os.environ["DBUS_SYSTEM_BUS_ADDRESS"] = entry.split(b"=", 1)[1].decode()
-                    break
-            if "DBUS_SYSTEM_BUS_ADDRESS" in os.environ:
-                break
-    if not os.environ.get("DBUS_SYSTEM_BUS_ADDRESS"):
-        raise RuntimeError(
-            "could not locate DBUS_SYSTEM_BUS_ADDRESS in any /proc/*/environ; "
-            "is aircast_sim running in this container?"
-        )
+    os.environ.setdefault(
+        "DBUS_SYSTEM_BUS_ADDRESS",
+        "unix:path=/run/dbus/system_bus_socket",
+    )
     return dbus.SystemBus()
 
 
@@ -107,9 +87,7 @@ class HappyWifiSmokeTest(unittest.TestCase):
         ap = self.bus.get_object(NM, aps[0])
         ap_props = dbus.Interface(ap, dbus_interface=PROPS)
         ssid_bytes = ap_props.Get(NM_AP, "Ssid")
-        # Ssid is type 'ay' (array of bytes). dbus-python returns it as
-        # dbus.Array of dbus.Byte; convert to plain bytes then decode.
-        ssid = bytes(int(b) for b in ssid_bytes).decode("utf-8")
+        ssid = bytes(ssid_bytes).decode("utf-8")
         self.assertEqual(ssid, "homeNet")
         strength = ap_props.Get(NM_AP, "Strength")
         self.assertEqual(int(strength), 87)

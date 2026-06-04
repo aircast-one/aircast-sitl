@@ -1,0 +1,21 @@
+name: dbus-sim
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'dbus-sim/**'
+      - '.github/workflows/dbus-sim.yml'
+  pull_request:
+    paths:
+      - 'dbus-sim/**'
+      - '.github/workflows/dbus-sim.yml'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and smoke test
+        working-directory: dbus-sim
+        run: make test
