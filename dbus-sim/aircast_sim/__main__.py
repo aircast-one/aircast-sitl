@@ -58,20 +58,18 @@ def _install_signal_handlers() -> None:
 
 
 def _start_bus() -> str:
-    """Start the private system bus and return its address.
+    """Return the bus address.
 
-    ``DBusTestCase.start_system_bus`` is a classmethod that spawns a
-    dbus-daemon under the calling process's lifetime. It exports the bus
-    address via the ``DBUS_SYSTEM_BUS_ADDRESS`` env var so any client
-    spawned later in this process (including the templates we're about
-    to load) picks it up automatically.
+    Phase 1 spawned a private bus via dbusmock.DBusTestCase.start_system_bus()
+    at a random /tmp path. For sidecar use the entrypoint launches dbus-daemon
+    itself at unix:path=/run/dbus/system_bus_socket and exports the address via
+    DBUS_SYSTEM_BUS_ADDRESS. We just verify the env var is set.
     """
-    dbusmock.DBusTestCase.start_system_bus()
     addr = os.environ.get("DBUS_SYSTEM_BUS_ADDRESS")
     if not addr:
         raise RuntimeError(
-            "start_system_bus did not set DBUS_SYSTEM_BUS_ADDRESS; "
-            "dbusmock version mismatch?"
+            "DBUS_SYSTEM_BUS_ADDRESS not set; this module expects the "
+            "entrypoint to launch dbus-daemon before invoking aircast_sim."
         )
     return addr
 

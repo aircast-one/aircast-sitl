@@ -27,7 +27,8 @@ RUN apt-get update \
         tini \
  && rm -rf /var/lib/apt/lists/* \
  && rm -f /usr/share/dbus-1/system-services/org.freedesktop.NetworkManager.service \
-          /usr/share/dbus-1/system-services/org.freedesktop.ModemManager1.service
+          /usr/share/dbus-1/system-services/org.freedesktop.ModemManager1.service \
+ && mkdir -p /run/dbus
 
 # We do not pip-install our package. Trixie's python3 is PEP-668 externally
 # managed; rather than carry a venv just for one in-tree module, we drop the
@@ -38,6 +39,7 @@ ENV PYTHONUNBUFFERED=1
 
 COPY aircast_sim /opt/aircast_sim
 COPY tests       /opt/tests
+COPY conf/aircast-sim-bus.conf /etc/dbus-1/aircast-sim-bus.conf
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
