@@ -6,22 +6,13 @@
 # ---
 FROM debian:trixie-slim AS runtime
 
-# - dbus           : provides dbus-daemon + dbus-uuidgen
-# - python3        : interpreter
-# - python3-dbus   : Python D-Bus bindings (also pulled in by dbusmock)
-# - python3-dbusmock : NM + MM templates and DBusTestCase helpers
-# - tini           : PID 1 signal forwarder
-# - bash           : entrypoint shell
-#
-# After install, we remove the bundled NetworkManager / ModemManager1
-# .service files so dbus-daemon won't try to auto-activate the real
-# binaries when a client looks up the well-known name. (See design doc
-# /docs/simulators.md, "Container blueprint" -> "Pitfalls".)
-#
-# EXTERNAL auth requires the connecting uid to exist in /etc/passwd. The
-# aircast-agent container runs as uid 1000; create a matching user here so
-# godbus (which only attempts EXTERNAL) can authenticate. -m / -s are
-# defensive defaults; the user never logs in.
+# - Packages: dbus + python3-dbus + python3-dbusmock + tini + bash.
+# - Drop bundled NM/MM .service files so dbus-daemon can't auto-activate
+#   the real binaries (we replace both with mocks).
+# - Create uid-1000 `aircast` user. It owns /run/dbus and /var/lib/dbus,
+#   matches the agent container's default uid (EXTERNAL auth pairs the
+#   peer-uid against /etc/passwd), and is what dbus-daemon drops to
+#   after binding the socket (see conf/aircast-sim-bus.conf).
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
         bash \
@@ -34,7 +25,8 @@ RUN apt-get update \
  && rm -f /usr/share/dbus-1/system-services/org.freedesktop.NetworkManager.service \
           /usr/share/dbus-1/system-services/org.freedesktop.ModemManager1.service \
  && mkdir -p /run/dbus \
- && useradd -u 1000 -m -s /bin/bash aircast
+ && useradd -u 1000 -m -s /bin/bash aircast \
+ && chown -R aircast:aircast /run/dbus /var/lib/dbus
 
 # We do not pip-install our package. Trixie's python3 is PEP-668 externally
 # managed; rather than carry a venv just for one in-tree module, we drop the
@@ -54,6 +46,8 @@ HEALTHCHECK --interval=2s --timeout=2s --retries=10 \
 
 LABEL org.opencontainers.image.source="https://github.com/aircast-one/aircast-sitl" \
       org.opencontainers.image.description="aircast D-Bus simulator (Phase 1: skeleton)"
+
+USER aircast
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/entrypoint.sh"]
 
