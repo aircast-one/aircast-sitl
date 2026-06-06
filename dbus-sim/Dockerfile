@@ -62,6 +62,7 @@ ENTRYPOINT ["/usr/bin/tini", "--", "/entrypoint.sh"]
 # here because this stage exists solely to host the linter binaries.
 # ---
 FROM runtime AS dev-tools
+USER root
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
         python3-pip \
