@@ -1,0 +1,6 @@
+apiVersion: v2
+name: aircast-dbus-sim
+description: Library chart exposing reusable templates for embedding the aircast D-Bus simulator as a sidecar in another chart's Pod spec.
+type: library
+version: 0.1.0
+appVersion: "0.1.0"
