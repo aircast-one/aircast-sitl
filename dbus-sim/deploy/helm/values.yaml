@@ -1,0 +1,23 @@
+# These values are CONSUMED by the partial templates below. A parent chart
+# that includes this library will typically override `image.tag` and may
+# override resource limits, scenario, log level.
+
+image:
+  repository: ghcr.io/aircast-one/aircast-sim
+  tag: dev
+  pullPolicy: IfNotPresent
+
+scenario: happy_wifi
+
+resources:
+  requests:
+    memory: 96Mi
+    cpu: 25m
+  limits:
+    memory: 256Mi
+    cpu: 200m
+
+# Name of the emptyDir volume the sidecar and its consumer share. The
+# consumer container must also mount this volume at /run/dbus and set
+# DBUS_SYSTEM_BUS_ADDRESS to unix:path=/run/dbus/system_bus_socket.
+volumeName: dbus-socket

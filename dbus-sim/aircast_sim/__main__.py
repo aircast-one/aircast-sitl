@@ -1,0 +1,184 @@
+"""aircast_sim entry point.
+
+Spawns a private D-Bus system bus, loads the NetworkManager and
+ModemManager1 dbusmock templates, applies the requested scenario, and
+blocks until SIGTERM/SIGINT.
+
+Phase 1 (this module) is intentionally tiny — no HTTP control plane, no
+YAML loader, no transitions. Scenarios are Python modules under
+``aircast_sim.scenarios.builtins`` exposing a single ``apply(nm, mm)``
+function. Only ``happy_wifi`` exists today; later phases (see
+``/docs/simulators.md``) introduce a YAML loader.
+"""
+
+from __future__ import annotations
+
+import argparse
+import importlib
+import json
+import logging
+import os
+import re
+import signal
+import subprocess
+import sys
+import threading
+
+import dbusmock
+from dbus.proxies import ProxyObject
+
+LOG = logging.getLogger("aircast_sim")
+
+_SCENARIO_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+
+# Block forever in main() until a signal handler trips this event. We don't
+# use signal.pause() because we want a clean way to share the event with
+# the cleanup path.
+_shutdown_event = threading.Event()
+
+
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="aircast_sim",
+        description="aircast D-Bus simulator (Phase 1 skeleton).",
+    )
+    parser.add_argument(
+        "--scenario",
+        default="happy_wifi",
+        help="Built-in scenario module name (under aircast_sim.scenarios.builtins). "
+        "Default: happy_wifi.",
+    )
+    return parser.parse_args(argv)
+
+
+def _install_signal_handlers() -> None:
+    def _handle(signum, _frame):
+        LOG.info("received signal %s, shutting down", signum)
+        _shutdown_event.set()
+
+    signal.signal(signal.SIGTERM, _handle)
+    signal.signal(signal.SIGINT, _handle)
+
+
+def _resolve_bus_address() -> str:
+    """Read the bus address from the environment.
+
+    The entrypoint script launches dbus-daemon at a stable path and
+    exports DBUS_SYSTEM_BUS_ADDRESS before invoking this module. This
+    function only validates that the env var is set.
+    """
+    addr = os.environ.get("DBUS_SYSTEM_BUS_ADDRESS")
+    if not addr:
+        raise RuntimeError(
+            "DBUS_SYSTEM_BUS_ADDRESS not set; this module expects the "
+            "entrypoint to launch dbus-daemon before invoking aircast_sim."
+        )
+    return addr
+
+
+def _spawn_template(name: str) -> tuple[subprocess.Popen, ProxyObject]:
+    """Spawn a python-dbusmock template against the running system bus.
+
+    Returns the (process, mock_proxy) tuple. The proxy is a ``dbus.proxies``
+    object pointing at the template's MAIN_OBJ and supporting the helper
+    methods exposed under the ``org.freedesktop.DBus.Mock`` interface
+    (e.g. ``AddWiFiDevice``, ``SetGlobalConnectionState``).
+
+    Template stdout is sent to /dev/null. The dbusmock templates log every
+    method call to stdout; if we PIPE it the buffer fills (~64 KB) and the
+    template blocks on its next write, deadlocking our scenario apply.
+    Capturing it would only matter if we wanted to replay the wire trace
+    for tests; for Phase 1 it's noise.
+    """
+    proc, proxy = dbusmock.DBusTestCase.spawn_server_template(
+        name,
+        {},  # template parameters — defaults are fine for Phase 1
+        stdout=subprocess.DEVNULL,
+    )
+    return proc, proxy
+
+
+def _emit_ready(scenario: str, bus_address: str) -> None:
+    """Single-line JSON readiness signal on stdout.
+
+    Picked up by the smoke test runner / ``make run`` poll loop /
+    eventual K8s readiness probe. Stdout only — keep stderr for logs.
+    """
+    line = json.dumps(
+        {
+            "service": "aircast_sim",
+            "phase": 1,
+            "scenario": scenario,
+            "bus_address": bus_address,
+            "ready": True,
+        },
+        sort_keys=True,
+    )
+    sys.stdout.write(line + "\n")
+    sys.stdout.flush()
+
+
+def main(argv: list[str] | None = None) -> int:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(name)s %(levelname)s %(message)s",
+        stream=sys.stderr,
+    )
+    args = _parse_args(argv)
+
+    if not _SCENARIO_NAME_RE.fullmatch(args.scenario):
+        LOG.error(
+            "invalid scenario name %r; must match %s",
+            args.scenario,
+            _SCENARIO_NAME_RE.pattern,
+        )
+        return 2
+
+    _install_signal_handlers()
+
+    bus_address = _resolve_bus_address()
+    LOG.info("bus address: %s", bus_address)
+
+    nm_proc: subprocess.Popen | None = None
+    mm_proc: subprocess.Popen | None = None
+    try:
+        nm_proc, nm_mock = _spawn_template("networkmanager")
+        LOG.info("loaded networkmanager template (pid=%s)", nm_proc.pid)
+
+        mm_proc, mm_mock = _spawn_template("modemmanager")
+        LOG.info("loaded modemmanager template (pid=%s)", mm_proc.pid)
+
+        module_name = f"aircast_sim.scenarios.builtins.{args.scenario}"
+        try:
+            scenario_mod = importlib.import_module(module_name)
+        except ImportError as exc:
+            LOG.error("scenario %r not found: %s", args.scenario, exc)
+            return 2
+
+        LOG.info("applying scenario %s", args.scenario)
+        scenario_mod.apply(nm_mock, mm_mock)
+        LOG.info("scenario applied")
+
+        _emit_ready(args.scenario, bus_address)
+
+        # Block until SIGTERM/SIGINT.
+        _shutdown_event.wait()
+        return 0
+    finally:
+        for proc, label in ((mm_proc, "modemmanager"), (nm_proc, "networkmanager")):
+            if proc is None:
+                continue
+            LOG.info("terminating %s template (pid=%s)", label, proc.pid)
+            try:
+                proc.terminate()
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                LOG.warning("%s did not exit cleanly, killing", label)
+                proc.kill()
+                proc.wait(timeout=5)
+            except (OSError, ProcessLookupError) as exc:
+                LOG.warning("error terminating %s: %s", label, exc)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
