@@ -4,7 +4,7 @@
 # Boots a private dbus-daemon, loads python-dbusmock's NetworkManager and
 # ModemManager1 templates, and applies the bundled happy-wifi scenario.
 # ---
-FROM debian:trixie-slim
+FROM debian:trixie-slim AS runtime
 
 # - dbus           : provides dbus-daemon + dbus-uuidgen
 # - python3        : interpreter
@@ -56,3 +56,23 @@ LABEL org.opencontainers.image.source="https://github.com/aircast-one/aircast-si
       org.opencontainers.image.description="aircast D-Bus simulator (Phase 1: skeleton)"
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/entrypoint.sh"]
+
+# ---
+# Dev tooling image (for `make lint`, `make typecheck`, `make format`).
+# Built with `docker build --target dev-tools -t aircast-sim:dev-tools .`
+# Adds ruff + mypy via pip; the runtime image stays minimal.
+#
+# Why pip (not apt): trixie ships mypy but not ruff (verified at build
+# time: `E: Unable to locate package ruff`). Rather than mix sources,
+# both come from PyPI. --break-system-packages bypasses PEP-668 — fine
+# here because this stage exists solely to host the linter binaries.
+# ---
+FROM runtime AS dev-tools
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+        python3-pip \
+ && rm -rf /var/lib/apt/lists/* \
+ && pip3 install --break-system-packages --no-cache-dir \
+        "ruff>=0.4" \
+        "mypy>=1.10"
+ENTRYPOINT []

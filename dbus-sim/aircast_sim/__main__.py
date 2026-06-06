@@ -23,7 +23,6 @@ import signal
 import subprocess
 import sys
 import threading
-from typing import Optional
 
 import dbusmock
 from dbus.proxies import ProxyObject
@@ -38,7 +37,7 @@ _SCENARIO_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _shutdown_event = threading.Event()
 
 
-def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="aircast_sim",
         description="aircast D-Bus simulator (Phase 1 skeleton).",
@@ -119,7 +118,7 @@ def _emit_ready(scenario: str, bus_address: str) -> None:
     sys.stdout.flush()
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
@@ -140,8 +139,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     bus_address = _resolve_bus_address()
     LOG.info("bus address: %s", bus_address)
 
-    nm_proc: Optional[subprocess.Popen] = None
-    mm_proc: Optional[subprocess.Popen] = None
+    nm_proc: subprocess.Popen | None = None
+    mm_proc: subprocess.Popen | None = None
     try:
         nm_proc, nm_mock = _spawn_template("networkmanager")
         LOG.info("loaded networkmanager template (pid=%s)", nm_proc.pid)

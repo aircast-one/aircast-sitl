@@ -10,11 +10,12 @@
 IMAGE ?= ghcr.io/aircast-one/aircast-sim
 TAG   ?= dev
 NAME  ?= aircast-sim
+DEV_IMAGE := aircast-sim:dev-tools
 
-.PHONY: build run stop logs test
+.PHONY: build run stop logs test dev-image lint format typecheck
 
 build:
-	docker build -t $(IMAGE):$(TAG) .
+	docker build --target runtime -t $(IMAGE):$(TAG) .
 
 run:
 	docker run --rm --name $(NAME) -d $(IMAGE):$(TAG)
@@ -52,3 +53,20 @@ test: build
 	echo "--- end sim logs ---"; \
 	$(MAKE) --no-print-directory stop; \
 	exit $$rc
+
+dev-image:
+	docker build --target dev-tools -t $(DEV_IMAGE) .
+
+# Run ruff against the package and tests. Refuses to format-fix; use
+# `make format` for that.
+lint: dev-image
+	docker run --rm -v $(CURDIR):/work -w /work $(DEV_IMAGE) \
+		ruff check aircast_sim tests
+
+format: dev-image
+	docker run --rm -v $(CURDIR):/work -w /work $(DEV_IMAGE) \
+		ruff format aircast_sim tests
+
+typecheck: dev-image
+	docker run --rm -v $(CURDIR):/work -w /work $(DEV_IMAGE) \
+		mypy aircast_sim
