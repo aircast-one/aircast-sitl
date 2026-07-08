@@ -37,34 +37,34 @@ Docker-based ArduPilot SITL simulator for ARM64 and AMD64 platforms.
 
 ```bash
 # Build the image (current platform)
-make build
+just build
 
 # Build for specific architecture
-make build-arm64    # Apple Silicon, Raspberry Pi
-make build-amd64    # Intel/AMD x86_64
+just build-arm64    # Apple Silicon, Raspberry Pi
+just build-amd64    # Intel/AMD x86_64
 
 # Build for both architectures
-make build-multi
+just build-multi
 
 # Run SITL
-make run
+just run
 
 # Stop SITL
-make stop
+just stop
 ```
 
 ## Available Commands
 
 | Command | Description |
 |---------|-------------|
-| `make build` | Build for current platform |
-| `make build-arm64` | Build for ARM64 (Apple Silicon, Raspberry Pi) |
-| `make build-amd64` | Build for AMD64 (Intel/AMD x86_64) |
-| `make build-multi` | Build for both ARM64 and AMD64 |
-| `make run` | Run SITL container |
-| `make stop` | Stop running container |
-| `make logs` | Show container logs |
-| `make push-multi` | Push multi-arch image to registry |
+| `just build` | Build for current platform |
+| `just build-arm64` | Build for ARM64 (Apple Silicon, Raspberry Pi) |
+| `just build-amd64` | Build for AMD64 (Intel/AMD x86_64) |
+| `just build-multi` | Build for both ARM64 and AMD64 |
+| `just run` | Run SITL container |
+| `just stop` | Stop running container |
+| `just logs` | Show container logs |
+| `just push-multi` | Push multi-arch image to registry |
 
 ## Multi-Architecture Support
 
@@ -77,20 +77,20 @@ This image supports both ARM64 and AMD64 architectures:
 
 ```bash
 # For Apple Silicon / Raspberry Pi
-make build-arm64
+just build-arm64
 
 # For Intel/AMD systems
-make build-amd64
+just build-amd64
 
 # For both (creates manifest with both architectures)
-make build-multi
+just build-multi
 ```
 
 ### Pushing Multi-Architecture Images
 
 ```bash
 # Build and push for both architectures
-make push-multi
+just push-multi
 ```
 
 This creates a single image tag that automatically selects the correct architecture when pulled.
