@@ -16,12 +16,12 @@ Full design: see `/docs/simulators.md` in the parent monorepo.
 
 ```sh
 # Build + run the smoke test (most useful target)
-make test
+just test
 
 # Start the sim in the background and tail logs
-make run
-make logs
-make stop
+just run
+just logs
+just stop
 ```
 
 The simulator currently exposes only the **happy-wifi** scenario:
@@ -72,7 +72,7 @@ Until Phase 6 the image is local-only — there's no published GHCR tag.
 ```
 dbus-sim/
 ├── Dockerfile
-├── Makefile
+├── justfile
 ├── README.md
 ├── entrypoint.sh
 ├── pyproject.toml

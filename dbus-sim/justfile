@@ -1,0 +1,85 @@
+# aircast D-Bus simulator task runner. Run `just` to list recipes.
+
+set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
+
+image     := "ghcr.io/aircast-one/aircast-sim"
+tag       := "dev"
+name      := "aircast-sim"
+dev_image := "aircast-sim:dev-tools"
+
+# List available recipes
+default:
+    @just --list
+
+# Build the sim image
+[group('build')]
+build:
+    docker build --target runtime -t {{image}}:{{tag}} .
+
+# Start the sim container detached and wait for readiness
+[group('run')]
+run:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    docker run --rm --name {{name}} -d {{image}}:{{tag}}
+    echo "waiting for sim to become ready..."
+    for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+        if docker logs {{name}} 2>&1 | grep -q '"phase": 1'; then
+            echo "sim is ready"
+            docker ps --filter "name={{name}}" --format '{{{{.ID}}'
+            exit 0
+        fi
+        sleep 1
+    done
+    echo "sim did not report ready within 15s"
+    docker logs {{name}}
+    docker stop {{name}} >/dev/null 2>&1 || true
+    exit 1
+
+# Stop the running sim container
+[group('run')]
+stop:
+    docker stop {{name}} || true
+
+# Follow the sim container logs
+[group('run')]
+logs:
+    docker logs -f {{name}}
+
+# Full smoke test: build → run → exec tests in-container → stop
+[group('build')]
+test: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just run
+    set +e
+    docker exec {{name}} python3 -m unittest discover -v /opt/tests
+    rc=$?
+    echo "--- sim logs ---"
+    docker logs {{name}}
+    echo "--- end sim logs ---"
+    just stop
+    exit $rc
+
+# Build the dev-tools image (ruff, mypy)
+[group('build')]
+dev-image:
+    docker build --target dev-tools -t {{dev_image}} .
+
+# Run ruff against the package and tests
+[group('lint')]
+lint: dev-image
+    docker run --rm -v {{justfile_directory()}}:/work -w /work {{dev_image}} \
+        ruff check aircast_sim tests
+
+# Format the package and tests with ruff
+[group('lint')]
+format: dev-image
+    docker run --rm -v {{justfile_directory()}}:/work -w /work {{dev_image}} \
+        ruff format aircast_sim tests
+
+# Type-check the package with mypy
+[group('lint')]
+typecheck: dev-image
+    docker run --rm -v {{justfile_directory()}}:/work -w /work {{dev_image}} \
+        mypy aircast_sim
