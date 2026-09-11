@@ -11,13 +11,13 @@ One GitHub Actions workflow handles everything:
 ### Available Images
 ```bash
 # Latest from master
-docker pull ghcr.io/pavliha/aircast-sitl:latest
+docker pull ghcr.io/aircast-one/aircast-sitl:latest
 
 # Development
-docker pull ghcr.io/pavliha/aircast-sitl:latest-dev
+docker pull ghcr.io/aircast-one/aircast-sitl:latest-dev
 
 # Specific version
-docker pull ghcr.io/pavliha/aircast-sitl:1.0.0
+docker pull ghcr.io/aircast-one/aircast-sitl:1.0.0
 ```
 
 ### Workflow
@@ -107,13 +107,13 @@ GitHub Actions automatically builds and pushes images:
 ### Available Images
 ```bash
 # Latest from main branch
-docker pull ghcr.io/pavliha/aircast-sitl:latest
+docker pull ghcr.io/aircast-one/aircast-sitl:latest
 
 # Specific version
-docker pull ghcr.io/pavliha/aircast-sitl:1.0.0
+docker pull ghcr.io/aircast-one/aircast-sitl:1.0.0
 
 # Development branch
-docker pull ghcr.io/pavliha/aircast-sitl:develop
+docker pull ghcr.io/aircast-one/aircast-sitl:develop
 ```
 
 ### Creating a Release

@@ -7,7 +7,7 @@
 #################################
 # 1) Builder stage: compile SITL
 #################################
-FROM --platform=$BUILDPLATFORM ubuntu:22.04 AS builder
+FROM ubuntu:22.04 AS builder
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG AP_TAG=Copter-4.5
@@ -57,7 +57,7 @@ RUN --mount=type=cache,id=ccache,target=/root/.ccache \
 #################################
 # 2) Frontend: build React app
 #################################
-FROM node:22-alpine AS frontend
+FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend
 
 ARG VITE_CESIUM_ION_TOKEN=""
 ENV VITE_CESIUM_ION_TOKEN=$VITE_CESIUM_ION_TOKEN
