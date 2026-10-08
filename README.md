@@ -62,6 +62,7 @@ just stop
 | `just build-amd64` | Build for AMD64 (Intel/AMD x86_64) |
 | `just build-multi` | Build for both ARM64 and AMD64 |
 | `just run` | Run SITL container |
+| `just camera` | Stream the drone's onboard camera over RTSP |
 | `just stop` | Stop running container |
 | `just logs` | Show container logs |
 | `just push-multi` | Push multi-arch image to registry |
@@ -140,6 +141,14 @@ Add a UDP connection to `localhost:14550`
 
 ### Mission Planner
 Add a TCP connection to `localhost:5760`
+
+## Onboard Camera
+
+`just camera` renders the drone's gimballed camera from the SITL's telemetry (Cesium terrain + Esri
+imagery, headless Chrome on this Mac's GPU) and serves it as `rtsp://<this mac>:8554/sim`.
+
+In the Aircast app, add a TCP link to `sitl.aircast.one:5760` and a camera with the printed RTSP
+address. `just camera <host>` follows another SITL. Needs Docker, uv, gh and Google Chrome.
 
 ## Ports
 

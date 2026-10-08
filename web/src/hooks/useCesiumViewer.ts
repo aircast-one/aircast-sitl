@@ -19,6 +19,7 @@ export type MapLayer = "satellite" | "map";
 const SATELLITE_PROVIDER = new UrlTemplateImageryProvider({
   url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
   credit: "Esri, Maxar, Earthstar Geographics",
+  maximumLevel: 19,
 });
 
 const OSM_PROVIDER = new OpenStreetMapImageryProvider({
@@ -50,10 +51,8 @@ export function useCesiumViewer(
       baseLayer: false,
     });
 
-    // Enable Cesium World Terrain (requires Ion token)
     viewer.scene.setTerrain(Terrain.fromWorldTerrain());
 
-    // Default to satellite imagery
     viewer.imageryLayers.addImageryProvider(SATELLITE_PROVIDER);
 
     viewer.scene.globe.enableLighting = true;
