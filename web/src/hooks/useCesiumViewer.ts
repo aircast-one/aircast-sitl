@@ -9,12 +9,15 @@ import {
   Terrain,
   OpenStreetMapImageryProvider,
   UrlTemplateImageryProvider,
+  Cesium3DTileset,
 } from "cesium";
 import "cesium/Build/Cesium/Widgets/widgets.css";
 
 Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_ION_TOKEN || "";
 
 export type MapLayer = "satellite" | "map";
+
+const GOOGLE_PHOTOREALISTIC_ASSET = 2275207;
 
 const SATELLITE_PROVIDER = new UrlTemplateImageryProvider({
   url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
@@ -28,6 +31,7 @@ const OSM_PROVIDER = new OpenStreetMapImageryProvider({
 
 export function useCesiumViewer(
   containerRef: React.RefObject<HTMLDivElement | null>,
+  { photorealistic = false }: { photorealistic?: boolean } = {},
 ) {
   const viewerRef = useRef<Viewer | null>(null);
 
@@ -51,9 +55,15 @@ export function useCesiumViewer(
       baseLayer: false,
     });
 
-    viewer.scene.setTerrain(Terrain.fromWorldTerrain());
-
-    viewer.imageryLayers.addImageryProvider(SATELLITE_PROVIDER);
+    if (photorealistic) {
+      viewer.scene.globe.show = false;
+      Cesium3DTileset.fromIonAssetId(GOOGLE_PHOTOREALISTIC_ASSET)
+        .then((tileset) => !viewer.isDestroyed() && viewer.scene.primitives.add(tileset))
+        .catch((error) => console.error("Photorealistic 3D tiles failed to load", error));
+    } else {
+      viewer.scene.setTerrain(Terrain.fromWorldTerrain());
+      viewer.imageryLayers.addImageryProvider(SATELLITE_PROVIDER);
+    }
 
     viewer.scene.globe.enableLighting = true;
     if (viewer.scene.skyAtmosphere) {
@@ -76,7 +86,7 @@ export function useCesiumViewer(
       viewer.destroy();
       viewerRef.current = null;
     };
-  }, [containerRef]);
+  }, [containerRef, photorealistic]);
 
   const setLayer = useCallback((layer: MapLayer) => {
     const viewer = viewerRef.current;

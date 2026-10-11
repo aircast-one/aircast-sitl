@@ -17,7 +17,7 @@ import { useTelemetry } from "@/hooks/useTelemetry.ts";
 import { useCesiumViewer, type MapLayer } from "@/hooks/useCesiumViewer.ts";
 import { Hud } from "@/components/Hud.tsx";
 import { Button } from "@/components/ui/button.tsx";
-import { HOME_POSE, smoothPose, type Pose } from "@/lib/pose.ts";
+import { HOME_POSE, smoothPose, terrainFollowing, type Pose } from "@/lib/pose.ts";
 
 const MODEL_URL = "/models/drone.glb";
 
@@ -79,7 +79,7 @@ export function FpvPage() {
       animId = requestAnimationFrame(animate);
       if (!viewer || viewer.isDestroyed()) return;
 
-      const s = smoothPose(poseRef.current, telemetryRef.current, viewer);
+      const s = smoothPose(poseRef.current, telemetryRef.current, terrainFollowing(viewer));
       poseRef.current = s;
 
       const position = Cartesian3.fromDegrees(s.lng, s.lat, s.alt);

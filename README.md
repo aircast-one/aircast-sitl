@@ -144,8 +144,10 @@ Add a TCP connection to `localhost:5760`
 
 ## Onboard Camera
 
-`just camera` renders the drone's gimballed camera from the SITL's telemetry (Cesium terrain + Esri
-imagery, headless Chrome on this Mac's GPU) and serves it as `rtsp://<this mac>:8554/sim`.
+`just camera` renders the drone's gimballed camera from the SITL's telemetry (Google Photorealistic
+3D Tiles through Cesium ion, headless Chrome on this Mac's GPU) and serves it as
+`rtsp://<this mac>:8554/sim`. `just camera <host> satellite` falls back to flat Esri imagery on Cesium
+terrain.
 
 In the Aircast app, add a TCP link to `sitl.aircast.one:5760` and a camera with the printed RTSP
 address. `just camera <host>` follows another SITL. Needs Docker, uv, gh and Google Chrome.

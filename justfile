@@ -78,9 +78,9 @@ run:
         -p {{web_port}} \
         {{full_image}}
 
-# Render the onboard camera of the SITL at `host` and serve it as rtsp://<this mac>:8554/sim
+# Render the onboard camera of the SITL at `host` and serve it as rtsp://<this mac>:8554/sim (look: photoreal | satellite)
 [group('run')]
-camera host=sitl_host:
+camera host=sitl_host look="photoreal":
     #!/usr/bin/env bash
     set -euo pipefail
     profile=$(mktemp -d)
@@ -99,7 +99,7 @@ camera host=sitl_host:
     "{{chrome}}" --headless --user-data-dir="$profile" --window-size=1280,720 \
         --disable-features=WebRtcHideLocalIpsWithMdns \
         --disable-background-timer-throttling --disable-renderer-backgrounding \
-        "http://localhost:5174/camera?whip=http://localhost:8899/sim/whip" 2>/dev/null &
+        "http://localhost:5174/camera?look={{look}}&whip=http://localhost:8899/sim/whip" 2>/dev/null &
     echo "Vehicle: TCP {{host}}:5760"
     echo "Camera:  rtsp://$(ipconfig getifaddr en0):8554/sim"
     wait
