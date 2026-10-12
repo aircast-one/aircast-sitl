@@ -20,7 +20,7 @@ const connections = [
   },
   {
     title: "QGroundControl",
-    info: "UDP Connection:\nHost: sitl.aircast.one\nPort: 14550",
+    info: "TCP Connection:\nHost: sitl.aircast.one\nPort: 5760",
   },
   {
     title: "Mission Planner",
@@ -162,13 +162,9 @@ export function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap justify-center gap-2">
-              {["TCP: 5760-5765", "UDP: 14550-14555", "FlightGear: 9005"].map(
-                (port) => (
-                  <Badge key={port} variant="secondary" className="font-mono">
-                    {port}
-                  </Badge>
-                ),
-              )}
+              <Badge variant="secondary" className="font-mono">
+                TCP: 5760
+              </Badge>
             </div>
           </CardContent>
         </Card>

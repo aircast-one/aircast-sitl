@@ -3,33 +3,18 @@
 One GitHub Actions workflow handles everything:
 
 ### What It Does
-- **Pull Requests**: Builds only (no push)
-- **Push to master**: Builds `latest` tag
-- **Push to develop**: Builds `latest-dev` + deploys to development
-- **Version tags** (`v1.0.0`): Builds versioned tag + creates GitHub release
+- **Version tags** (`v1.0.0`): Builds versioned tag + `latest`, creates GitHub release, deploys to production (sitl.aircast.one)
 
 ### Available Images
 ```bash
-# Latest from master
+# Latest release
 docker pull ghcr.io/aircast-one/aircast-sitl:latest
-
-# Development
-docker pull ghcr.io/aircast-one/aircast-sitl:latest-dev
 
 # Specific version
 docker pull ghcr.io/aircast-one/aircast-sitl:1.0.0
 ```
 
-### Workflow
-```bash
-# Development
-git push origin develop
-# → Builds + deploys to dev environment
-
-# Release
-git tag v1.0.0 && git push origin v1.0.0
-# → Builds + creates GitHub release
-```# Aircast SITL
+# Aircast SITL
 
 Docker-based ArduPilot SITL simulator for ARM64 and AMD64 platforms.
 
