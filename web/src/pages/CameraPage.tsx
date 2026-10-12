@@ -1,12 +1,11 @@
 import { useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Cartesian3, JulianDate, Math as CesiumMath, createWorldTerrainAsync } from "cesium";
+import { Cartesian3, JulianDate, createWorldTerrainAsync } from "cesium";
 import { useTelemetry } from "@/hooks/useTelemetry.ts";
 import { useCesiumViewer } from "@/hooks/useCesiumViewer.ts";
 import { HOME_POSE, homeAltitude, smoothPose, terrainHeight, tilesHeight } from "@/lib/pose.ts";
 import { publishWhip } from "@/lib/whip.ts";
 
-const GIMBAL_TILT = CesiumMath.toRadians(-15);
 const FRAME_RATE = 30;
 const SUPERSAMPLE = 1.5;
 
@@ -44,7 +43,7 @@ export function CameraPage() {
       pose.current = smoothPose(pose.current, telemetryRef.current, altitude);
       viewer.camera.setView({
         destination: Cartesian3.fromDegrees(pose.current.lng, pose.current.lat, pose.current.alt),
-        orientation: { heading: pose.current.yaw, pitch: GIMBAL_TILT, roll: 0 },
+        orientation: { heading: pose.current.aimHeading, pitch: pose.current.aimPitch, roll: 0 },
       });
     });
   }, [viewerRef, photorealistic]);

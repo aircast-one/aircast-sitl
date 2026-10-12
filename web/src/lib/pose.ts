@@ -1,4 +1,4 @@
-import { Cartographic, sampleTerrainMostDetailed, type TerrainProvider, type Viewer } from "cesium";
+import { Cartographic, Math as CesiumMath, sampleTerrainMostDetailed, type TerrainProvider, type Viewer } from "cesium";
 import type { Telemetry } from "@/hooks/useTelemetry.ts";
 
 export interface Pose {
@@ -8,7 +8,11 @@ export interface Pose {
   roll: number;
   pitch: number;
   yaw: number;
+  aimHeading: number;
+  aimPitch: number;
 }
+
+const FIXED_TILT = CesiumMath.toRadians(-15);
 
 export const HOME_POSE: Pose = {
   lat: -35.363262,
@@ -17,6 +21,8 @@ export const HOME_POSE: Pose = {
   roll: 0,
   pitch: 0,
   yaw: 0,
+  aimHeading: 0,
+  aimPitch: FIXED_TILT,
 };
 
 const LERP = 0.1;
@@ -80,11 +86,17 @@ export function homeAltitude(heightAt: HeightAt): Altitude {
   };
 }
 
+export function cameraAim(t: Telemetry): { heading: number; pitch: number } {
+  if (!t.gimbal) return { heading: t.yaw, pitch: FIXED_TILT };
+  return { heading: t.gimbal.earthYaw ? t.gimbal.yaw : t.yaw + t.gimbal.yaw, pitch: t.gimbal.pitch };
+}
+
 export function smoothPose(prev: Pose, t: Telemetry, altitude: Altitude): Pose {
   const hasFix = t.lat !== 0 || t.lng !== 0;
   const lat = hasFix ? lerp(prev.lat, t.lat) : prev.lat;
   const lng = hasFix ? lerp(prev.lng, t.lng) : prev.lng;
   const target = altitude(lng, lat, t);
+  const aim = cameraAim(t);
   return {
     lat,
     lng,
@@ -92,5 +104,7 @@ export function smoothPose(prev: Pose, t: Telemetry, altitude: Altitude): Pose {
     roll: lerp(prev.roll, t.roll),
     pitch: lerp(prev.pitch, t.pitch),
     yaw: prev.yaw + wrapAngle(t.yaw - prev.yaw) * LERP,
+    aimHeading: prev.aimHeading + wrapAngle(aim.heading - prev.aimHeading) * LERP,
+    aimPitch: lerp(prev.aimPitch, aim.pitch),
   };
 }

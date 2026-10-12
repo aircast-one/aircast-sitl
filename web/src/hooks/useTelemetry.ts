@@ -21,6 +21,13 @@ export interface Telemetry {
   homeSet: boolean;
   homeLat: number;
   homeLng: number;
+  gimbal: Gimbal | null;
+}
+
+export interface Gimbal {
+  pitch: number;
+  yaw: number;
+  earthYaw: boolean;
 }
 
 const initialTelemetry: Telemetry = {
@@ -44,6 +51,7 @@ const initialTelemetry: Telemetry = {
   homeSet: false,
   homeLat: 0,
   homeLng: 0,
+  gimbal: null,
 };
 
 interface MavlinkMessage {
@@ -99,6 +107,9 @@ export function useTelemetry() {
           throttle: msg.throttle as number,
           climb: msg.climb as number,
         };
+        break;
+      case "GIMBAL":
+        next = { ...prev, gimbal: { pitch: msg.pitch as number, yaw: msg.yaw as number, earthYaw: msg.earth_yaw as boolean } };
         break;
       case "HEARTBEAT":
         next = { ...prev, armed: msg.armed as boolean };

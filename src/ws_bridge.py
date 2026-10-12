@@ -5,13 +5,15 @@ and forwards parsed telemetry as JSON over WebSocket to browser clients.
 """
 import asyncio
 import json
+import math
 import os
 import time
 
 import websockets
 from pymavlink import mavutil
 
-WANTED_TYPES = {'HEARTBEAT', 'ATTITUDE', 'GLOBAL_POSITION_INT', 'VFR_HUD'}
+WANTED_TYPES = {'HEARTBEAT', 'ATTITUDE', 'GLOBAL_POSITION_INT', 'VFR_HUD', 'GIMBAL_DEVICE_ATTITUDE_STATUS'}
+YAW_IN_EARTH_FRAME = 64
 
 
 def msg_to_json(msg):
@@ -46,6 +48,14 @@ def msg_to_json(msg):
             'vy': msg.vy / 100.0,
             'vz': msg.vz / 100.0,
             'hdg': msg.hdg / 100.0,
+        }
+    elif msg_type == 'GIMBAL_DEVICE_ATTITUDE_STATUS':
+        w, x, y, z = msg.q
+        return {
+            'type': 'GIMBAL',
+            'pitch': math.asin(max(-1.0, min(1.0, 2 * (w * y - z * x)))),
+            'yaw': math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z)),
+            'earth_yaw': bool(msg.flags & YAW_IN_EARTH_FRAME),
         }
     elif msg_type == 'VFR_HUD':
         return {

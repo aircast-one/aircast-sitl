@@ -115,6 +115,7 @@ COPY --from=frontend /app/dist /var/www/html/
 
 # Copy Python services
 COPY src/ws_bridge.py /opt/aircast/ws_bridge.py
+COPY src/gimbal.parm /usr/local/share/aircast/gimbal.parm
 COPY src/serve.py /opt/aircast/serve.py
 
 # mavlink-router config: connect to SITL on 5766, expose TCP 5760 for unlimited clients
@@ -212,4 +213,4 @@ EXPOSE 9005 8888 8889
 
 # Use the wrapper script as entrypoint
 ENTRYPOINT ["/usr/local/bin/start-aircast-sitl.sh"]
-CMD ["-S","-I0","-M","copter","-s","1","-w","--defaults","/usr/local/share/ardupilot/default_params/copter.parm","--uartA","tcp:5766"]
+CMD ["-S","-I0","-M","copter","-s","1","-w","--defaults","/usr/local/share/ardupilot/default_params/copter.parm,/usr/local/share/aircast/gimbal.parm","--uartA","tcp:5766"]
