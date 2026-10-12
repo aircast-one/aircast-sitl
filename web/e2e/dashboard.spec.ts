@@ -44,7 +44,6 @@ test.describe("Dashboard Page", () => {
     await expect(
       page.getByText("mavproxy.py --master=tcp://sitl.aircast.one:5760"),
     ).toBeVisible();
-    await expect(page.getByText(/UDP|14550/)).toHaveCount(0);
   });
 
   test("connection card copies text to clipboard on click", async ({
@@ -79,5 +78,7 @@ test.describe("Dashboard Page", () => {
       page.getByRole("heading", { name: "Available Ports" }),
     ).toBeVisible();
     await expect(page.getByText("TCP: 5760", { exact: true })).toBeVisible();
+    await expect(page.getByText("UDP: 14550", { exact: true })).toBeVisible();
+    await expect(page.getByText("FlightGear: 9005")).toBeVisible();
   });
 });
