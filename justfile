@@ -18,6 +18,7 @@ sitl_host      := "sitl.aircast.one"
 mediamtx_image := "bluenviron/mediamtx:1.20.1"
 chrome         := "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 unreal_root    := "/Users/Shared/Epic Games/UE_5.8"
+tailscale      := "/Applications/Tailscale.app/Contents/MacOS/Tailscale"
 cesium_unreal  := "2.30.0"
 
 # List available recipes
@@ -111,6 +112,8 @@ camera host=sitl_host look="photoreal":
     fi
     echo "Vehicle: TCP {{host}}:5760"
     echo "Camera:  rtsp://$(ipconfig getifaddr en0):8554/sim"
+    tailnet=$("{{tailscale}}" ip -4 2>/dev/null || true)
+    [ -z "$tailnet" ] || echo "Tailnet: rtsp://$tailnet:8554/sim"
     wait
 
 # Fetch the pinned Cesium for Unreal and build the Unreal camera project
