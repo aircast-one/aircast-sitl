@@ -1,6 +1,7 @@
 #!/bin/bash
 
 VEHICLE_FILE=/var/lib/aircast/vehicle
+HOME_FILE=/var/lib/aircast/home
 DEFAULT_PARAMS=/usr/local/share/ardupilot/default_params
 MODEL_PARAMS=/usr/local/share/ardupilot/models
 AIRCAST_PARAMS=/usr/local/share/aircast
@@ -63,8 +64,9 @@ while true; do
             ;;
     esac
     model="${SITL_MODEL:-$model}"
-    echo "Starting $binary SITL ($vehicle) with args: ${ARGS[*]} -M $model --defaults $defaults"
-    "/usr/local/bin/$binary" "${ARGS[@]}" -M "$model" --defaults "$defaults" &
+    home=$(cat "$HOME_FILE" 2>/dev/null || true)
+    echo "Starting $binary SITL ($vehicle) with args: ${ARGS[*]} -M $model --defaults $defaults ${home:+--home $home}"
+    "/usr/local/bin/$binary" "${ARGS[@]}" -M "$model" --defaults "$defaults" ${home:+--home "$home"} &
     sitl_pid=$!
     echo "SITL started with PID $sitl_pid"
 

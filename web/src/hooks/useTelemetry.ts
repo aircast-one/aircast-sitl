@@ -85,7 +85,8 @@ export function useTelemetry() {
       case "GLOBAL_POSITION_INT": {
         const lat = msg.lat as number;
         const lng = msg.lng as number;
-        const homeSet = prev.homeSet || lat !== 0;
+        const fix = lat !== 0 || lng !== 0;
+        const rehome = fix && (!prev.homeSet || !prev.armed);
         next = {
           ...prev,
           lat,
@@ -96,9 +97,9 @@ export function useTelemetry() {
           vy: msg.vy as number,
           vz: msg.vz as number,
           heading: msg.hdg as number,
-          homeSet,
-          homeLat: homeSet && !prev.homeSet ? lat : prev.homeLat,
-          homeLng: homeSet && !prev.homeSet ? lng : prev.homeLng,
+          homeSet: prev.homeSet || fix,
+          homeLat: rehome ? lat : prev.homeLat,
+          homeLng: rehome ? lng : prev.homeLng,
         };
         break;
       }

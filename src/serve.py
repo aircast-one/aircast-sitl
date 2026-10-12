@@ -2,11 +2,16 @@ import json
 import os
 import subprocess
 import time
+import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 WEB_DIR = os.environ.get("WEB_DIR", "/var/www/html")
 VEHICLE_FILE = os.environ.get("VEHICLE_FILE", "/var/lib/aircast/vehicle")
+HOME_FILE = os.environ.get("HOME_FILE", "/var/lib/aircast/home")
 VEHICLES = ("copter", "plane", "quadplane")
+DEFAULT_HOME = {"lat": -35.363261, "lng": 149.165230, "alt": 584.0, "heading": 353.0}
+ELEVATION_URL = "https://api.open-meteo.com/v1/elevation?latitude={lat}&longitude={lng}"
+ELEVATION_TIMEOUT_S = 5
 SITL_PROCESS = "ardu(copter|plane)"
 RESTART_TIMEOUT_S = 15
 
@@ -18,6 +23,24 @@ def current_vehicle():
     except OSError:
         return VEHICLES[0]
     return vehicle if vehicle in VEHICLES else VEHICLES[0]
+
+
+def current_home():
+    try:
+        with open(HOME_FILE) as f:
+            values = [float(v) for v in f.read().split(",")]
+    except (OSError, ValueError):
+        return DEFAULT_HOME
+    return dict(zip(DEFAULT_HOME, values)) if len(values) == len(DEFAULT_HOME) else DEFAULT_HOME
+
+
+def ground_elevation(lat, lng):
+    with urllib.request.urlopen(ELEVATION_URL.format(lat=lat, lng=lng), timeout=ELEVATION_TIMEOUT_S) as res:
+        return float(json.load(res)["elevation"][0])
+
+
+def coordinate(value, limit):
+    return value if type(value) in (int, float) and -limit <= value <= limit else None
 
 
 def sitl_pids():
@@ -48,6 +71,9 @@ class SITLHandler(SimpleHTTPRequestHandler):
         if self.path == "/api/vehicle":
             self._send_json(200, {"vehicle": current_vehicle(), "vehicles": list(VEHICLES)})
             return
+        if self.path == "/api/home":
+            self._send_json(200, current_home())
+            return
         path = self.translate_path(self.path)
         if not os.path.exists(path) or (os.path.isdir(path) and not os.path.exists(os.path.join(path, "index.html"))):
             self.path = "/index.html"
@@ -60,6 +86,9 @@ class SITLHandler(SimpleHTTPRequestHandler):
         if self.path == "/api/vehicle":
             self._handle_vehicle()
             return
+        if self.path == "/api/home":
+            self._handle_home()
+            return
         self._send_json(404, {"error": "not found"})
 
     def _handle_reset(self):
@@ -68,12 +97,36 @@ class SITLHandler(SimpleHTTPRequestHandler):
         else:
             self._send_json(503, {"error": "no SITL process running"})
 
-    def _handle_vehicle(self):
+    def _read_json(self):
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            vehicle = json.loads(self.rfile.read(length) or b"{}").get("vehicle")
-        except (ValueError, AttributeError):
-            vehicle = None
+            body = json.loads(self.rfile.read(length) or b"{}")
+        except ValueError:
+            return {}
+        return body if isinstance(body, dict) else {}
+
+    def _handle_home(self):
+        body = self._read_json()
+        lat, lng = coordinate(body.get("lat"), 90), coordinate(body.get("lng"), 180)
+        if lat is None or lng is None:
+            self._send_json(400, {"error": "lat must be within ±90 and lng within ±180"})
+            return
+        try:
+            alt = ground_elevation(lat, lng)
+        except (OSError, ValueError, KeyError, IndexError, TypeError):
+            self._send_json(502, {"error": "could not look up the ground elevation there"})
+            return
+        home = {"lat": lat, "lng": lng, "alt": alt, "heading": 0.0}
+        os.makedirs(os.path.dirname(HOME_FILE), exist_ok=True)
+        with open(HOME_FILE, "w") as f:
+            f.write(",".join(str(v) for v in home.values()))
+        if restart_sitl():
+            self._send_json(200, home)
+        else:
+            self._send_json(503, {"error": "the SITL did not come back up"})
+
+    def _handle_vehicle(self):
+        vehicle = self._read_json().get("vehicle")
         if vehicle not in VEHICLES:
             self._send_json(400, {"error": f"vehicle must be one of {', '.join(VEHICLES)}"})
             return

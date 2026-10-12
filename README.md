@@ -126,6 +126,14 @@ address. `just camera <host>` follows another SITL. Needs Docker, uv, gh and Goo
 The dashboard switches the simulator between Copter, Plane and QuadPlane. A switch restarts the SITL
 for everyone connected. `POST /api/vehicle` with `{"vehicle": "plane"}` does the same from a script.
 
+## Location
+
+The Location panel on the dashboard moves the vehicle's starting point. Click the satellite map,
+search for a place or paste `lat, lng`, then press Move here. The SITL restarts there for everyone
+connected, with the ground elevation looked up from [Open-Meteo](https://open-meteo.com/en/docs/elevation-api).
+`POST /api/home` with `{"lat": 41.7151, "lng": 44.8271}` does the same from a script. The location
+resets to the ArduPilot default (CMAC, Canberra) when the container restarts.
+
 ## License
 
 GPL-3.0, the same as the ArduPilot it builds. See [LICENSE](LICENSE).

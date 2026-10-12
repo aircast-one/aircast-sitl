@@ -20,7 +20,7 @@ export type MapLayer = "satellite" | "map";
 const GOOGLE_PHOTOREALISTIC_ASSET = 2275207;
 const PHOTOREALISTIC_SCREEN_SPACE_ERROR = 4;
 
-const SATELLITE_PROVIDER = new UrlTemplateImageryProvider({
+export const SATELLITE_PROVIDER = new UrlTemplateImageryProvider({
   url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
   credit: "Esri, Maxar, Earthstar Geographics",
   maximumLevel: 19,

@@ -1,9 +1,10 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { ArrowUpRight, Check, Copy, LoaderCircle, RotateCcw } from "lucide-react";
+import { ArrowUpRight, Check, Copy, LoaderCircle, MapPin, RotateCcw } from "lucide-react";
 import { useTelemetry, type Telemetry } from "@/hooks/useTelemetry.ts";
 import { AirframeIcon, type AirframeId } from "@/components/Airframe.tsx";
 import { Attitude } from "@/components/Attitude.tsx";
+import { LocationMap, type LatLng } from "@/components/LocationMap.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { modeName } from "@/lib/modes.ts";
 import { cn } from "@/lib/utils.ts";
@@ -18,6 +19,19 @@ const airframes = [
 ] as const satisfies readonly { id: AirframeId; label: string; firmware: string; sub: string; modes: "copter" | "plane" }[];
 
 type LinkState = "live" | "waiting" | "offline";
+type Restart = AirframeId | "reset" | "home";
+type RestartError = { target: Restart; text: string };
+type Home = LatLng & { alt: number };
+
+const COORDINATES = /^\s*(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)\s*$/;
+
+function parseCoordinates(text: string): LatLng | null {
+  const match = COORDINATES.exec(text);
+  const [lat, lng] = match ? [Number(match[1]), Number(match[2])] : [NaN, NaN];
+  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : null;
+}
+
+const formatCoordinates = ({ lat, lng }: LatLng) => `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
 
 function useNow(intervalMs: number) {
   const [now, setNow] = useState(() => Date.now());
@@ -38,8 +52,9 @@ export function DashboardPage() {
   const now = useNow(500);
   const link = linkState(telemetry, now);
   const [airframe, setAirframe] = useState<AirframeId | null>(null);
-  const [switching, setSwitching] = useState<AirframeId | "reset" | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [home, setHome] = useState<Home | null>(null);
+  const [switching, setSwitching] = useState<Restart | null>(null);
+  const [error, setError] = useState<RestartError | null>(null);
   const host = window.location.hostname || "localhost";
 
   useEffect(() => {
@@ -47,21 +62,23 @@ export function DashboardPage() {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => data?.vehicle && setAirframe(data.vehicle))
       .catch(() => undefined);
+    fetch("/api/home")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => data && setHome(data))
+      .catch(() => undefined);
   }, []);
 
-  const restart = async (target: AirframeId | "reset", request: () => Promise<Response>) => {
+  const restart = async (target: Restart, request: () => Promise<Response>) => {
     setSwitching(target);
     setError(null);
     try {
       const res = await request();
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error ?? "The simulator did not restart");
-      }
-      return res.ok;
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) setError({ target, text: data.error ?? "The simulator did not restart" });
+      return res.ok ? data : null;
     } catch {
-      setError("Network error");
-      return false;
+      setError({ target, text: "Network error" });
+      return null;
     } finally {
       setSwitching(null);
     }
@@ -80,6 +97,17 @@ export function DashboardPage() {
   };
 
   const handleReset = () => restart("reset", () => fetch("/api/reset", { method: "POST" }));
+
+  const handleHome = async (at: LatLng) => {
+    const moved = await restart("home", () =>
+      fetch("/api/home", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(at),
+      }),
+    );
+    if (moved) setHome(moved);
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -100,11 +128,17 @@ export function DashboardPage() {
           <AirframePanel
             airframe={airframe}
             switching={switching}
-            error={error}
+            error={error?.target === "home" ? null : error?.text ?? null}
             telemetry={telemetry}
             link={link}
             onSelect={handleAirframe}
             onReset={handleReset}
+          />
+          <LocationPanel
+            home={home}
+            switching={switching}
+            error={error?.target === "home" ? error.text : null}
+            onMove={handleHome}
           />
           <TelemetryPanel telemetry={telemetry} live={link === "live"} />
         </div>
@@ -167,7 +201,7 @@ function AirframePanel({
   onReset,
 }: {
   airframe: AirframeId | null;
-  switching: AirframeId | "reset" | null;
+  switching: Restart | null;
   error: string | null;
   telemetry: Telemetry;
   link: LinkState;
@@ -228,6 +262,61 @@ function AirframePanel({
       </div>
       <p className="mt-3 text-xs text-muted-foreground">
         Switching restarts the simulator for everyone connected.
+        {error && <span className="ml-1 text-destructive">{error}</span>}
+      </p>
+    </Panel>
+  );
+}
+
+function LocationPanel({
+  home,
+  switching,
+  error,
+  onMove,
+}: {
+  home: Home | null;
+  switching: Restart | null;
+  error: string | null;
+  onMove: (at: LatLng) => void;
+}) {
+  const [text, setText] = useState<string | null>(null);
+  const shown = text ?? (home ? formatCoordinates(home) : "");
+  const pick = parseCoordinates(shown);
+  const moved = pick !== null && (home === null || formatCoordinates(pick) !== formatCoordinates(home));
+  const moving = switching === "home";
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (pick && moved) onMove(pick);
+  };
+  return (
+    <Panel
+      label="Location"
+      action={
+        home && (
+          <span className="font-mono text-xs tabular-nums text-muted-foreground">{`${home.alt.toFixed(0)} m AMSL`}</span>
+        )
+      }
+    >
+      <div className="h-64 overflow-hidden rounded-lg border border-border sm:h-72">
+        <LocationMap home={home} pick={moved ? pick : null} onPick={(at) => setText(formatCoordinates(at))} />
+      </div>
+      <form onSubmit={submit} className="mt-3 flex gap-2">
+        <input
+          aria-label="Coordinates"
+          value={shown}
+          onChange={(event) => setText(event.target.value)}
+          placeholder="lat, lng"
+          spellCheck={false}
+          aria-invalid={shown !== "" && pick === null}
+          className="h-9 min-w-0 flex-1 rounded-md border border-input bg-transparent px-3 font-mono text-[13px] tabular-nums outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive"
+        />
+        <Button type="submit" size="sm" className="h-9" disabled={!moved || switching !== null}>
+          {moving ? <LoaderCircle className="size-3.5 motion-safe:animate-spin" /> : <MapPin className="size-3.5" />}
+          {moving ? "Moving…" : "Move here"}
+        </Button>
+      </form>
+      <p className="mt-3 text-xs text-muted-foreground">
+        Click the map, search a place or paste coordinates. Moving restarts the simulator for everyone connected.
         {error && <span className="ml-1 text-destructive">{error}</span>}
       </p>
     </Panel>

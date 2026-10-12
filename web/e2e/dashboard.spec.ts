@@ -4,7 +4,7 @@ test.describe("Dashboard Page", () => {
   test("renders the top bar and the operator panels", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "Aircast SITL" })).toBeVisible();
-    for (const panel of ["Airframe", "Telemetry", "Connect", "Views"]) {
+    for (const panel of ["Airframe", "Location", "Telemetry", "Connect", "Views"]) {
       await expect(page.getByRole("heading", { name: panel, exact: true })).toBeVisible();
     }
   });
@@ -50,6 +50,37 @@ test.describe("Dashboard Page", () => {
     await copter.click();
     await expect(copter).toHaveAttribute("aria-pressed", "true", { timeout: 20_000 });
     expect(await (await request.get("/api/vehicle")).json()).toMatchObject({ vehicle: "copter" });
+  });
+
+  test("the location picker restarts the SITL where the map was clicked or coordinates were pasted", async ({ page, request }) => {
+    test.setTimeout(90_000);
+    const canberra = { lat: -35.363261, lng: 149.16523 };
+    await request.post("/api/home", { data: canberra });
+    await page.goto("/");
+    const location = page.locator("section", { has: page.getByRole("heading", { name: "Location", exact: true }) });
+    const coordinates = location.getByRole("textbox", { name: "Coordinates" });
+    const move = location.getByRole("button", { name: "Move here" });
+
+    await expect(coordinates).toHaveValue("-35.363261, 149.165230");
+    await expect(move).toBeDisabled();
+    await location.locator("canvas").click({ position: { x: 40, y: 40 } });
+    await expect(coordinates).not.toHaveValue("-35.363261, 149.165230");
+    await expect(move).toBeEnabled();
+
+    await coordinates.fill("41.7151, 44.8271");
+    await move.click();
+    await expect(move).toBeDisabled({ timeout: 20_000 });
+    await expect(location.getByText(/m AMSL$/)).toHaveText("590 m AMSL");
+    await expect(page.getByText(/^LAT 41\.71/)).toBeVisible({ timeout: 30_000 });
+    expect(await (await request.get("/api/home")).json()).toMatchObject({ lat: 41.7151, lng: 44.8271 });
+
+    await request.post("/api/home", { data: canberra });
+    await expect(page.getByText(/^LAT -35\.36/)).toBeVisible({ timeout: 30_000 });
+  });
+
+  test("the location API rejects coordinates off the globe", async ({ request }) => {
+    const res = await request.post("/api/home", { data: { lat: 91, lng: 0 } });
+    expect(res.status()).toBe(400);
   });
 
   test("lists the ports the simulator exposes", async ({ page }) => {
