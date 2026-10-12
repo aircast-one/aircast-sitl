@@ -1,24 +1,21 @@
-## 🚀 Automated Builds
-
-One GitHub Actions workflow handles everything:
-
-### What It Does
-- **Version tags** (`v1.0.0`): Builds versioned tag + `latest`, creates GitHub release, deploys to production (sitl.aircast.one)
-
-### Available Images
-```bash
-# Latest release
-docker pull ghcr.io/aircast-one/aircast-sitl:latest
-
-# Specific version
-docker pull ghcr.io/aircast-one/aircast-sitl:1.0.0
-```
-
 # Aircast SITL
 
-Docker-based ArduPilot SITL simulator for ARM64 and AMD64 platforms.
+Docker-based ArduPilot SITL (Copter, Plane, QuadPlane) for ARM64 and AMD64.
 
-## Quick Start
+## Run
+
+```bash
+docker pull ghcr.io/aircast-one/aircast-sitl:latest
+docker run --rm -it \
+  -p 5760-5765:5760-5765 -p 14550-14555:14550-14555/udp \
+  -p 8888:8888 -p 8889:8889 \
+  ghcr.io/aircast-one/aircast-sitl:latest
+```
+
+The dashboard is at http://localhost:8888 and MAVLink on TCP 5760 or UDP 14550. Each release is also
+tagged `v<version>-<commit>`; see [Releases](https://github.com/aircast-one/aircast-sitl/releases).
+
+## Build from source
 
 ```bash
 # Build the image (current platform)
@@ -81,38 +78,11 @@ just push-multi
 
 This creates a single image tag that automatically selects the correct architecture when pulled.
 
-## 🚀 Automated Builds
+## Releases
 
-GitHub Actions automatically builds and pushes images:
-
-### Triggers
-- **Push to main/develop**: Builds and pushes `latest` tag
-- **Pull requests**: Builds only (no push)
-- **Version tags** (`v1.0.0`): Builds and creates GitHub release
-
-### Available Images
-```bash
-# Latest from main branch
-docker pull ghcr.io/aircast-one/aircast-sitl:latest
-
-# Specific version
-docker pull ghcr.io/aircast-one/aircast-sitl:1.0.0
-
-# Development branch
-docker pull ghcr.io/aircast-one/aircast-sitl:develop
-```
-
-### Creating a Release
-```bash
-# Tag a version
-git tag v1.0.0
-git push origin v1.0.0
-
-# GitHub Actions will automatically:
-# 1. Build multi-arch images
-# 2. Push to container registry  
-# 3. Create GitHub release with changelog
-```
+Maintainers release with `just release aircast-sitl <type>` from the Aircast superproject. Every `v*` tag
+builds AMD64 and ARM64 on native runners, publishes `latest` and `v<version>-<commit>`, and rolls out
+sitl.aircast.one.
 
 ## Connecting to SITL
 
