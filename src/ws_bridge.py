@@ -9,6 +9,7 @@ from pymavlink import mavutil
 
 WANTED_TYPES = {'HEARTBEAT', 'ATTITUDE', 'GLOBAL_POSITION_INT', 'VFR_HUD', 'GIMBAL_DEVICE_ATTITUDE_STATUS'}
 YAW_IN_EARTH_FRAME = 64
+STREAM_SILENCE_S = 3
 
 
 def msg_to_json(msg):
@@ -66,16 +67,20 @@ def msg_to_json(msg):
     return None
 
 
+def request_streams(conn):
+    conn.mav.request_data_stream_send(
+        conn.target_system, conn.target_component,
+        mavutil.mavlink.MAV_DATA_STREAM_ALL, 10, 1
+    )
+
+
 def connect_mavlink(host, port):
     while True:
         try:
             conn = mavutil.mavlink_connection(f'tcp:{host}:{port}')
             conn.wait_heartbeat(timeout=10)
             print(f'Connected to MAVLink at tcp:{host}:{port} (sysid={conn.target_system})')
-            conn.mav.request_data_stream_send(
-                conn.target_system, conn.target_component,
-                mavutil.mavlink.MAV_DATA_STREAM_ALL, 10, 1
-            )
+            request_streams(conn)
             print('Requested MAVLink data streams')
             return conn
         except Exception as e:
@@ -102,11 +107,18 @@ async def ws_handler(websocket):
 
 async def mavlink_reader(mavlink_host, mavlink_port):
     mav = connect_mavlink(mavlink_host, mavlink_port)
+    streamed_at = time.monotonic()
 
     while True:
         try:
             msg = mav.recv_match(type=list(WANTED_TYPES), blocking=False)
             if msg:
+                if msg.get_type() != 'HEARTBEAT':
+                    streamed_at = time.monotonic()
+                elif time.monotonic() - streamed_at > STREAM_SILENCE_S:
+                    print('Only heartbeats for a while, the SITL restarted: requesting data streams again')
+                    request_streams(mav)
+                    streamed_at = time.monotonic()
                 data = msg_to_json(msg)
                 if data and clients:
                     payload = json.dumps(data)
