@@ -29,8 +29,8 @@ export function Attitude({ roll, pitch, live }: { roll: number; pitch: number; l
         </g>
       </g>
       <circle r="46" className="fill-none stroke-border" strokeWidth="1.5" />
-      <path d="M-26 0 H-9 L-5 5 M26 0 H9 L5 5" className="fill-none stroke-caution" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <circle r="1.6" className="fill-caution" />
+      <path d="M-26 0 H-9 L-5 5 M26 0 H9 L5 5" className="fill-none stroke-warning" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <circle r="1.6" className="fill-warning" />
     </svg>
   );
 }

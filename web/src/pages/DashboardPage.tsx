@@ -143,7 +143,7 @@ function LinkStatus({ link, telemetry, now }: { link: LinkState; telemetry: Tele
     waiting: silentFor === null ? "Waiting for heartbeat" : `No heartbeat for ${silentFor} s`,
     offline: "Dashboard offline",
   }[link];
-  const tone = { live: "bg-live", waiting: "bg-caution", offline: "bg-destructive-foreground" }[link];
+  const tone = { live: "bg-success", waiting: "bg-warning", offline: "bg-destructive" }[link];
   return (
     <div role="status" className="flex items-center gap-2 rounded-full border border-border/70 px-3 py-1 text-xs font-medium">
       <span className="relative flex size-2">
@@ -211,8 +211,8 @@ function AirframePanel({
               className={cn(
                 "group flex flex-col items-center gap-2 rounded-lg border px-2 pb-3 pt-4 text-center transition-[background-color,border-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.97] disabled:cursor-not-allowed",
                 selected
-                  ? "border-foreground/40 bg-accent text-foreground"
-                  : "border-border/70 text-muted-foreground enabled:hover:border-foreground/25 enabled:hover:text-foreground disabled:opacity-60",
+                  ? "border-primary bg-primary/10 text-foreground"
+                  : "border-border text-muted-foreground enabled:hover:border-foreground/25 enabled:hover:text-foreground disabled:opacity-60",
               )}
             >
               {pending ? (
@@ -228,7 +228,7 @@ function AirframePanel({
       </div>
       <p className="mt-3 text-xs text-muted-foreground">
         Switching restarts the simulator for everyone connected.
-        {error && <span className="ml-1 text-destructive-foreground">{error}</span>}
+        {error && <span className="ml-1 text-destructive">{error}</span>}
       </p>
     </Panel>
   );
@@ -240,7 +240,7 @@ function ArmedState({ armed, live }: { armed: boolean; live: boolean }) {
     <span
       className={cn(
         "rounded-md border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]",
-        armed ? "border-caution/50 bg-caution/10 text-caution" : "border-border/70 text-muted-foreground",
+        armed ? "border-warning/50 bg-warning/10 text-warning" : "border-border text-muted-foreground",
       )}
     >
       {armed ? "Armed" : "Disarmed"}
@@ -336,7 +336,7 @@ function CopyRow({ label, hint, value }: { label: string; hint: string; value: s
         </p>
       </div>
       <Button variant="ghost" size="icon" className="size-9 shrink-0 text-muted-foreground" aria-label={`Copy ${label}`} onClick={copy}>
-        {copied ? <Check className="size-4 text-live" /> : <Copy className="size-4" />}
+        {copied ? <Check className="size-4 text-success" /> : <Copy className="size-4" />}
       </Button>
     </li>
   );

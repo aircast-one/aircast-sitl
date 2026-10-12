@@ -11,6 +11,9 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@aircast/tokens": "github:aircast-one/aircast-tokens#0a36e4b59d642c4f03ec40cb3fe621c14556aa5c",
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
     "@radix-ui/react-slot": "^1.2.4",
     "@tailwindcss/vite": "^4.2.2",
     "cesium": "^1.139.1",
