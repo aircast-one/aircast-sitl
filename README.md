@@ -150,3 +150,15 @@ address. `just camera <host>` follows another SITL. Needs Docker, uv, gh and Goo
 |---------|-----------|-----------|
 | MAVLink | 5760-5765 | 14550-14555 |
 | FlightGear | 9005 | - |
+
+## Vehicles
+
+The dashboard switches the simulator between Copter, Plane and QuadPlane. A switch restarts the SITL
+for everyone connected. `POST /api/vehicle` with `{"vehicle": "plane"}` does the same from a script.
+
+## License
+
+GPL-3.0, the same as the ArduPilot it builds. See [LICENSE](LICENSE).
+
+`web/public/models/drone.glb` is the Cesium Drone, © 2017–2018 Analytical Graphics, Inc., mesh and
+textures by Ed Mackey, under [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/).

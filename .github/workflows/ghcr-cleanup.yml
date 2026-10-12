@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   cleanup:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - name: Delete untagged container images
         uses: actions/delete-package-versions@v5
