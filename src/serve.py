@@ -85,6 +85,11 @@ class SITLHandler(SimpleHTTPRequestHandler):
         else:
             self._send_json(503, {"error": "the SITL did not come back up"})
 
+    def end_headers(self):
+        immutable = self.path.startswith("/assets/")
+        self.send_header("Cache-Control", "public, max-age=31536000, immutable" if immutable else "no-cache")
+        super().end_headers()
+
     def _send_json(self, code, data):
         body = json.dumps(data).encode()
         self.send_response(code)

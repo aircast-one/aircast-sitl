@@ -17,6 +17,8 @@ export interface Telemetry {
   climb: number;
   throttle: number;
   armed: boolean;
+  mode: number | null;
+  heartbeatAt: number | null;
   connected: boolean;
   homeSet: boolean;
   homeLat: number;
@@ -47,6 +49,8 @@ const initialTelemetry: Telemetry = {
   climb: 0,
   throttle: 0,
   armed: false,
+  mode: null,
+  heartbeatAt: null,
   connected: false,
   homeSet: false,
   homeLat: 0,
@@ -112,7 +116,7 @@ export function useTelemetry() {
         next = { ...prev, gimbal: { pitch: msg.pitch as number, yaw: msg.yaw as number, earthYaw: msg.earth_yaw as boolean } };
         break;
       case "HEARTBEAT":
-        next = { ...prev, armed: msg.armed as boolean };
+        next = { ...prev, armed: msg.armed as boolean, mode: msg.mode as number, heartbeatAt: Date.now() };
         break;
     }
 
@@ -146,7 +150,7 @@ export function useTelemetry() {
       try {
         handleMessage(JSON.parse(event.data));
       } catch {
-        // ignore parse errors
+        return;
       }
     };
   }, [handleMessage]);

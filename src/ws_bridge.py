@@ -1,8 +1,3 @@
-"""
-WebSocket-to-MAVLink bridge for browser-based telemetry.
-Connects to ArduCopter SITL on localhost:5760 (TCP) via pymavlink
-and forwards parsed telemetry as JSON over WebSocket to browser clients.
-"""
 import asyncio
 import json
 import math
@@ -17,10 +12,11 @@ YAW_IN_EARTH_FRAME = 64
 
 
 def msg_to_json(msg):
-    """Convert a pymavlink message to JSON-serializable dict"""
     msg_type = msg.get_type()
 
     if msg_type == 'HEARTBEAT':
+        if msg.autopilot == mavutil.mavlink.MAV_AUTOPILOT_INVALID:
+            return None
         return {
             'type': 'HEARTBEAT',
             'armed': bool(msg.base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED),
@@ -71,7 +67,6 @@ def msg_to_json(msg):
 
 
 def connect_mavlink(host, port):
-    """Connect to SITL via TCP with retry, request data streams"""
     while True:
         try:
             conn = mavutil.mavlink_connection(f'tcp:{host}:{port}')
@@ -92,13 +87,12 @@ clients = set()
 
 
 async def ws_handler(websocket):
-    """Handle a WebSocket client connection"""
     clients.add(websocket)
     addr = websocket.remote_address
     print(f'WebSocket client connected: {addr}')
     try:
         async for _ in websocket:
-            pass  # We only send, ignore incoming messages
+            pass
     except websockets.ConnectionClosed:
         pass
     finally:
@@ -107,7 +101,6 @@ async def ws_handler(websocket):
 
 
 async def mavlink_reader(mavlink_host, mavlink_port):
-    """Read MAVLink messages and broadcast to WebSocket clients"""
     mav = connect_mavlink(mavlink_host, mavlink_port)
 
     while True:

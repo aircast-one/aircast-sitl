@@ -22,6 +22,11 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-live: var(--live);
+  --color-caution: var(--caution);
+  --color-sky: var(--sky);
+  --color-ground: var(--ground);
+  --animate-beat: beat 700ms cubic-bezier(0.23, 1, 0.32, 1) 1;
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -42,6 +47,10 @@
 }
 
 :root {
+  --live: oklch(0.6 0.17 152);
+  --caution: oklch(0.68 0.16 70);
+  --sky: oklch(0.62 0.08 240);
+  --ground: oklch(0.5 0.06 60);
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -78,6 +87,10 @@
 }
 
 .dark {
+  --live: oklch(0.78 0.17 152);
+  --caution: oklch(0.8 0.15 75);
+  --sky: oklch(0.46 0.07 240);
+  --ground: oklch(0.36 0.05 60);
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.145 0 0);
@@ -117,9 +130,20 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
       sans-serif;
+  }
+}
+
+@keyframes beat {
+  from {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  to {
+    transform: scale(2.6);
+    opacity: 0;
   }
 }
