@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Copy, ExternalLink, RotateCcw } from "lucide-react";
 import { useTelemetry } from "@/hooks/useTelemetry.ts";
@@ -32,41 +32,58 @@ const connections = [
   },
 ];
 
+const vehicles = [
+  { id: "copter", label: "Copter", firmware: "ArduCopter" },
+  { id: "plane", label: "Plane", firmware: "ArduPlane" },
+  { id: "quadplane", label: "QuadPlane", firmware: "ArduPlane QuadPlane" },
+] as const;
+
+type VehicleId = (typeof vehicles)[number]["id"];
+
 export function DashboardPage() {
   const telemetry = useTelemetry();
   const [resetting, setResetting] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
-  const sawDisconnect = useRef(false);
+  const [vehicle, setVehicle] = useState<VehicleId | null>(null);
+  const firmware = vehicles.find((v) => v.id === vehicle)?.firmware ?? "ArduPilot";
 
-  const handleReset = async () => {
+  useEffect(() => {
+    fetch("/api/vehicle")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => data?.vehicle && setVehicle(data.vehicle))
+      .catch(() => undefined);
+  }, []);
+
+  const restart = async (request: () => Promise<Response>) => {
     setResetting(true);
     setResetError(null);
     try {
-      const res = await fetch("/api/reset", { method: "POST" });
+      const res = await request();
       if (!res.ok) {
         const data = await res.json();
         setResetError(data.error ?? "Reset failed");
-        setResetting(false);
       }
+      return res.ok;
     } catch {
       setResetError("Network error");
+      return false;
+    } finally {
       setResetting(false);
     }
   };
 
-  // Clear resetting when telemetry drops then reconnects after reset
-  useEffect(() => {
-    if (!resetting) {
-      sawDisconnect.current = false;
-      return;
-    }
-    if (!telemetry.connected) {
-      sawDisconnect.current = true;
-    }
-    if (sawDisconnect.current && telemetry.connected) {
-      setResetting(false);
-    }
-  }, [resetting, telemetry.connected]);
+  const handleReset = () => restart(() => fetch("/api/reset", { method: "POST" }));
+
+  const handleVehicle = async (id: VehicleId) => {
+    const switched = await restart(() =>
+      fetch("/api/vehicle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vehicle: id }),
+      }),
+    );
+    if (switched) setVehicle(id);
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -78,7 +95,6 @@ export function DashboardPage() {
           ArduPilot Software-in-the-Loop Simulator
         </p>
 
-        {/* Status */}
         <Card className="mb-8">
           <CardHeader>
             <CardTitle className="flex items-center justify-center gap-2 text-xl">
@@ -95,11 +111,28 @@ export function DashboardPage() {
             </CardTitle>
             <CardDescription>
               {telemetry.connected
-                ? "ArduCopter SITL is active and ready for connections"
+                ? `${firmware} SITL is active and ready for connections`
                 : "Waiting for SITL connection..."}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-2">
+            <div role="group" aria-label="Vehicle" className="flex gap-2">
+              {vehicles.map((v) => (
+                <Button
+                  key={v.id}
+                  size="sm"
+                  variant={v.id === vehicle ? "default" : "outline"}
+                  aria-pressed={v.id === vehicle}
+                  disabled={resetting || vehicle === null}
+                  onClick={() => v.id !== vehicle && handleVehicle(v.id)}
+                >
+                  {v.label}
+                </Button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Switching restarts the simulator for everyone connected
+            </p>
             <Button
               variant="outline"
               size="sm"
@@ -115,7 +148,6 @@ export function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* FPV Card */}
         <Card className="mb-8 hover:bg-accent/50 transition-colors">
           <Link to="/fpv" className="block">
             <CardHeader>
@@ -132,7 +164,6 @@ export function DashboardPage() {
           </Link>
         </Card>
 
-        {/* Connection Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
           {connections.map((c) => (
             <Card
@@ -155,7 +186,6 @@ export function DashboardPage() {
           ))}
         </div>
 
-        {/* Ports */}
         <Card className="mb-8">
           <CardHeader>
             <CardTitle className="text-sm">Available Ports</CardTitle>

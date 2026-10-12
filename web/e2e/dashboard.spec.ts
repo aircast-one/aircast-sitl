@@ -23,7 +23,7 @@ test.describe("Dashboard Page", () => {
       page.getByText("SITL Status: Connected"),
     ).toBeVisible({ timeout: 15_000 });
     await expect(
-      page.getByText("ArduCopter SITL is active and ready for connections"),
+      page.getByText(/SITL is active and ready for connections/),
     ).toBeVisible();
   });
 
@@ -70,6 +70,30 @@ test.describe("Dashboard Page", () => {
     await page.getByText("3D FPV View").click();
     await expect(page).toHaveURL(/\/fpv/);
     await expect(page.locator("canvas")).toBeVisible();
+  });
+
+  test("the vehicle picker restarts the SITL as a plane and back as a copter", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(60_000);
+    await request.post("/api/vehicle", { data: { vehicle: "copter" } });
+    await page.goto("/");
+    const picker = page.getByRole("group", { name: "Vehicle" });
+    const copter = picker.getByRole("button", { name: "Copter" });
+    const plane = picker.getByRole("button", { name: "Plane", exact: true });
+
+    await expect(copter).toHaveAttribute("aria-pressed", "true");
+    await plane.click();
+    await expect(plane).toHaveAttribute("aria-pressed", "true", { timeout: 20_000 });
+    await expect(
+      page.getByText("ArduPlane SITL is active and ready for connections"),
+    ).toBeVisible();
+    expect(await (await request.get("/api/vehicle")).json()).toMatchObject({ vehicle: "plane" });
+
+    await copter.click();
+    await expect(copter).toHaveAttribute("aria-pressed", "true", { timeout: 20_000 });
+    expect(await (await request.get("/api/vehicle")).json()).toMatchObject({ vehicle: "copter" });
   });
 
   test("shows available ports", async ({ page }) => {
