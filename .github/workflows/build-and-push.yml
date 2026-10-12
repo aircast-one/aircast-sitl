@@ -2,10 +2,7 @@ name: Build and Deploy
 
 on:
   push:
-    branches: [ master ]
     tags: [ 'v*' ]
-  pull_request:
-    branches: [ master ]
   workflow_dispatch:
 
 env:
@@ -26,7 +23,6 @@ jobs:
     needs: pre_job
     if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
     runs-on: ubuntu-latest
-    environment: ${{ github.ref == 'refs/heads/master' && 'development' || '' }}
     permissions:
       contents: write
       packages: write
@@ -34,7 +30,7 @@ jobs:
 
     outputs:
       version: ${{ steps.version.outputs.version }}
-      environment: ${{ github.ref == 'refs/heads/master' && 'development' || 'production' }}
+      environment: production
 
     env:
       IMAGE_BASE: ${{ github.repository }}
@@ -69,11 +65,8 @@ jobs:
             VERSION=${GITHUB_REF#refs/tags/}
             echo "version=${VERSION}-${SHORT_SHA}" >> $GITHUB_OUTPUT
             echo "is_release=true" >> $GITHUB_OUTPUT
-          elif [[ $GITHUB_REF == refs/heads/master ]]; then
-            echo "version=v0.0.0-dev-${SHORT_SHA}" >> $GITHUB_OUTPUT
-            echo "is_develop=true" >> $GITHUB_OUTPUT
           else
-            echo "version=pr-${{ github.event.number }}-${SHORT_SHA}" >> $GITHUB_OUTPUT
+            echo "version=manual-${SHORT_SHA}" >> $GITHUB_OUTPUT
           fi
 
       - name: Build and push Docker image
@@ -84,7 +77,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ghcr.io/${{ env.REPO_NAME }}:${{ steps.version.outputs.version }}
-            ghcr.io/${{ env.REPO_NAME }}:${{ steps.version.outputs.is_develop == 'true' && 'latest-dev' || steps.version.outputs.is_release == 'true' && 'latest' || 'pr' }}
+            ghcr.io/${{ env.REPO_NAME }}:${{ steps.version.outputs.is_release == 'true' && 'latest' || 'manual' }}
           build-args: |
             VITE_CESIUM_ION_TOKEN=${{ vars.VITE_CESIUM_ION_TOKEN }}
           cache-from: type=gha
@@ -122,7 +115,7 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    if: ${{ !cancelled() && needs.build.result == 'success' && github.ref == 'refs/heads/master' }}
+    if: ${{ !cancelled() && needs.build.result == 'success' && startsWith(github.ref, 'refs/tags/v') }}
 
     steps:
       - name: Trigger GitOps update
