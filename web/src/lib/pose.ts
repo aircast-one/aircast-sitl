@@ -26,6 +26,7 @@ export const HOME_POSE: Pose = {
 };
 
 const LERP = 0.1;
+const SNAP_DEGREES = 0.01;
 const GROUND_CLEARANCE_M = 0.5;
 
 const lerp = (from: number, to: number) => from + (to - from) * LERP;
@@ -51,9 +52,9 @@ export const terrainHeight =
     (await sampleTerrainMostDetailed(await terrain, [at]))[0]?.height;
 
 export const tilesHeight =
-  (viewer: Viewer): HeightAt =>
+  (viewer: Viewer, exclude: object[] = []): HeightAt =>
   async (at) =>
-    (await viewer.scene.sampleHeightMostDetailed([at]))[0]?.height;
+    (await viewer.scene.sampleHeightMostDetailed([at], exclude))[0]?.height;
 
 function sampledHeight(heightAt: HeightAt) {
   const cache = { key: "", height: undefined as number | undefined, due: 0 };
@@ -93,14 +94,16 @@ export function cameraAim(t: Telemetry): { heading: number; pitch: number } {
 
 export function smoothPose(prev: Pose, t: Telemetry, altitude: Altitude): Pose {
   const hasFix = t.lat !== 0 || t.lng !== 0;
-  const lat = hasFix ? lerp(prev.lat, t.lat) : prev.lat;
-  const lng = hasFix ? lerp(prev.lng, t.lng) : prev.lng;
+  const jumped = hasFix && Math.abs(t.lat - prev.lat) + Math.abs(t.lng - prev.lng) > SNAP_DEGREES;
+  const follow = (from: number, to: number) => (jumped ? to : lerp(from, to));
+  const lat = hasFix ? follow(prev.lat, t.lat) : prev.lat;
+  const lng = hasFix ? follow(prev.lng, t.lng) : prev.lng;
   const target = altitude(lng, lat, t);
   const aim = cameraAim(t);
   return {
     lat,
     lng,
-    alt: target === undefined ? prev.alt : lerp(prev.alt, target),
+    alt: target === undefined ? prev.alt : follow(prev.alt, target),
     roll: lerp(prev.roll, t.roll),
     pitch: lerp(prev.pitch, t.pitch),
     yaw: prev.yaw + wrapAngle(t.yaw - prev.yaw) * LERP,

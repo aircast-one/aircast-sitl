@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   Cartesian3,
   ConstantPositionProperty,
@@ -17,14 +17,19 @@ import { useTelemetry } from "@/hooks/useTelemetry.ts";
 import { useCesiumViewer, type MapLayer } from "@/hooks/useCesiumViewer.ts";
 import { Hud } from "@/components/Hud.tsx";
 import { Button } from "@/components/ui/button.tsx";
-import { HOME_POSE, smoothPose, terrainFollowing, type Pose } from "@/lib/pose.ts";
+import { HOME_POSE, homeAltitude, smoothPose, terrainFollowing, tilesHeight, type Pose } from "@/lib/pose.ts";
 
 const MODEL_URL = "/models/drone.glb";
+const NEAREST_M = 5;
+const FARTHEST_M = 5000;
+const DRAGGED_RAD = 0.002;
 
 export function FpvPage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const telemetry = useTelemetry();
-  const { viewerRef, setLayer } = useCesiumViewer(containerRef);
+  const [params] = useSearchParams();
+  const photorealistic = params.get("look") !== "satellite";
+  const { viewerRef, setLayer } = useCesiumViewer(containerRef, { photorealistic });
   const [layer, setLayerState] = useState<MapLayer>("satellite");
   const poseRef = useRef<Pose>(HOME_POSE);
   const entityRef = useRef<Entity | null>(null);
@@ -65,9 +70,12 @@ export function FpvPage() {
     entityRef.current = entity;
 
     const controller = viewer.scene.screenSpaceCameraController;
-    controller.minimumZoomDistance = 5;
-    controller.maximumZoomDistance = 5000;
+    controller.minimumZoomDistance = NEAREST_M;
+    controller.maximumZoomDistance = FARTHEST_M;
+    const altitude = photorealistic ? homeAltitude(tilesHeight(viewer, [entity])) : terrainFollowing(viewer);
 
+    let behind = 0;
+    let aimedAt = initialPos;
     let camHeading = 0;
     let camPitch = CesiumMath.toRadians(-30);
     let camRange = 50;
@@ -79,7 +87,7 @@ export function FpvPage() {
       animId = requestAnimationFrame(animate);
       if (!viewer || viewer.isDestroyed()) return;
 
-      const s = smoothPose(poseRef.current, telemetryRef.current, terrainFollowing(viewer));
+      const s = smoothPose(poseRef.current, telemetryRef.current, altitude);
       poseRef.current = s;
 
       const position = Cartesian3.fromDegrees(s.lng, s.lat, s.alt);
@@ -92,17 +100,22 @@ export function FpvPage() {
       const transform = Transforms.eastNorthUpToFixedFrame(position);
 
       if (initialized) {
-        camHeading = viewer.camera.heading;
+        const dragged = CesiumMath.negativePiToPi(viewer.camera.heading - camHeading);
+        behind = Math.abs(dragged) > DRAGGED_RAD ? behind + dragged : behind;
         camPitch = viewer.camera.pitch;
-        camRange = Cartesian3.magnitude(
-          Cartesian3.subtract(viewer.camera.positionWC, position, new Cartesian3()),
+        camRange = CesiumMath.clamp(
+          Cartesian3.magnitude(Cartesian3.subtract(viewer.camera.positionWC, aimedAt, new Cartesian3())),
+          NEAREST_M,
+          FARTHEST_M,
         );
       }
+      camHeading = heading + behind;
 
       viewer.camera.lookAtTransform(
         transform,
         new HeadingPitchRange(camHeading, camPitch, camRange),
       );
+      aimedAt = position;
       initialized = true;
     }
 
@@ -119,7 +132,7 @@ export function FpvPage() {
       }
       entityRef.current = null;
     };
-  }, [viewerRef]);
+  }, [viewerRef, photorealistic]);
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-black">
@@ -129,18 +142,20 @@ export function FpvPage() {
         <Button variant="outline" size="sm" className="bg-background/60 font-mono text-xs" asChild>
           <Link to="/">SITL Dashboard</Link>
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="bg-background/60 font-mono text-xs"
-          onClick={() => {
-            const next = layer === "satellite" ? "map" : "satellite";
-            setLayer(next);
-            setLayerState(next);
-          }}
-        >
-          {layer === "satellite" ? "MAP" : "SAT"}
-        </Button>
+        {!photorealistic && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="bg-background/60 font-mono text-xs"
+            onClick={() => {
+              const next = layer === "satellite" ? "map" : "satellite";
+              setLayer(next);
+              setLayerState(next);
+            }}
+          >
+            {layer === "satellite" ? "MAP" : "SAT"}
+          </Button>
+        )}
       </div>
 
       <Hud telemetry={telemetry} />
