@@ -18,6 +18,7 @@ Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_ION_TOKEN || "";
 export type MapLayer = "satellite" | "map";
 
 const GOOGLE_PHOTOREALISTIC_ASSET = 2275207;
+const PHOTOREALISTIC_SCREEN_SPACE_ERROR = 4;
 
 const SATELLITE_PROVIDER = new UrlTemplateImageryProvider({
   url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
@@ -57,7 +58,9 @@ export function useCesiumViewer(
 
     if (photorealistic) {
       viewer.scene.globe.show = false;
-      Cesium3DTileset.fromIonAssetId(GOOGLE_PHOTOREALISTIC_ASSET)
+      Cesium3DTileset.fromIonAssetId(GOOGLE_PHOTOREALISTIC_ASSET, {
+        maximumScreenSpaceError: PHOTOREALISTIC_SCREEN_SPACE_ERROR,
+      })
         .then((tileset) => !viewer.isDestroyed() && viewer.scene.primitives.add(tileset))
         .catch((error) => console.error("Photorealistic 3D tiles failed to load", error));
     } else {

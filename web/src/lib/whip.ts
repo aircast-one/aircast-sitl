@@ -12,10 +12,13 @@ const iceGathered = (pc: RTCPeerConnection) =>
     check();
   });
 
-async function connect(track: MediaStreamTrack, url: string) {
+async function connect(track: MediaStreamTrack, url: string, downscale: number) {
   const pc = new RTCPeerConnection();
   try {
-    pc.addTransceiver(track, { direction: "sendonly" }).setCodecPreferences(
+    pc.addTransceiver(track, {
+      direction: "sendonly",
+      sendEncodings: [{ scaleResolutionDownBy: downscale }],
+    }).setCodecPreferences(
       (RTCRtpSender.getCapabilities("video")?.codecs ?? []).filter(isPublishable),
     );
     await pc.setLocalDescription(await pc.createOffer());
@@ -34,7 +37,7 @@ async function connect(track: MediaStreamTrack, url: string) {
   }
 }
 
-export function publishWhip(track: MediaStreamTrack, url: string): () => void {
+export function publishWhip(track: MediaStreamTrack, url: string, downscale = 1): () => void {
   const session: {
     pc?: RTCPeerConnection;
     timer?: ReturnType<typeof setTimeout>;
@@ -49,7 +52,7 @@ export function publishWhip(track: MediaStreamTrack, url: string): () => void {
   };
 
   const start = () =>
-    connect(track, url)
+    connect(track, url, downscale)
       .then((pc) => {
         if (session.stopped) return pc.close();
         session.pc = pc;

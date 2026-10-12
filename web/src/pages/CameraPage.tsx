@@ -8,6 +8,7 @@ import { publishWhip } from "@/lib/whip.ts";
 
 const GIMBAL_TILT = CesiumMath.toRadians(-15);
 const FRAME_RATE = 30;
+const SUPERSAMPLE = 1.5;
 
 const solarNoon = (lng: number) =>
   JulianDate.addHours(
@@ -33,6 +34,7 @@ export function CameraPage() {
     if (!viewer || viewer.isDestroyed()) return;
 
     viewer.scene.screenSpaceCameraController.enableInputs = false;
+    viewer.resolutionScale = SUPERSAMPLE;
     viewer.clock.shouldAnimate = false;
     viewer.clock.currentTime = solarNoon(HOME_POSE.lng);
     const pose = { current: HOME_POSE };
@@ -52,7 +54,7 @@ export function CameraPage() {
     if (!whipUrl || !viewer || viewer.isDestroyed()) return;
 
     const [track] = viewer.canvas.captureStream(FRAME_RATE).getVideoTracks();
-    const stop = publishWhip(track, whipUrl);
+    const stop = publishWhip(track, whipUrl, SUPERSAMPLE);
     return () => {
       stop();
       track.stop();

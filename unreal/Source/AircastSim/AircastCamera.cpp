@@ -34,8 +34,11 @@ namespace
 	constexpr double ResampleSeconds = 1.0;
 	constexpr double ReconnectSeconds = 2.0;
 	constexpr int32 FrameRate = 30;
-	const FIntPoint FrameSize(1280, 720);
+	const FIntPoint OutputSize(1280, 720);
+	constexpr int32 Supersample = 2;
+	const FIntPoint FrameSize = OutputSize * Supersample;
 	constexpr float FieldOfView = 60.0f;
+	constexpr double ScreenSpaceError = 4.0;
 }
 
 AAircastCamera::AAircastCamera()
@@ -91,6 +94,7 @@ void AAircastCamera::BeginPlay()
 	Tileset->SetTilesetSource(ETilesetSource::FromCesiumIon);
 	Tileset->SetIonAccessToken(IonToken);
 	Tileset->SetIonAssetID(GooglePhotorealisticAsset);
+	Tileset->SetMaximumScreenSpaceError(ScreenSpaceError);
 
 	ACesiumSunSky* Sky = GetWorld()->SpawnActor<ACesiumSunSky>();
 	Sky->TimeZone = FMath::RoundToDouble(HomePose.X / 15.0);
@@ -229,8 +233,8 @@ void AAircastCamera::Stream()
 	{
 		const FString Command = FString::Printf(
 			TEXT("ffmpeg -loglevel error -use_wallclock_as_timestamps 1 -f rawvideo -pix_fmt bgra -s %dx%d -i - ")
-			TEXT("-r %d -c:v h264_videotoolbox -realtime 1 -b:v 4M -g %d -bf 0 -f rtsp -rtsp_transport tcp %s"),
-			FrameSize.X, FrameSize.Y, FrameRate, FrameRate, *RtspUrl);
+			TEXT("-vf scale=%d:%d:flags=lanczos -r %d -c:v h264_videotoolbox -realtime 1 -b:v 4M -g %d -bf 0 -f rtsp -rtsp_transport tcp %s"),
+			FrameSize.X, FrameSize.Y, OutputSize.X, OutputSize.Y, FrameRate, FrameRate, *RtspUrl);
 		Encoder = popen(TCHAR_TO_UTF8(*Command), "w");
 	}
 	Capture->CaptureScene();
