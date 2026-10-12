@@ -39,6 +39,7 @@ namespace
 	const FIntPoint FrameSize = OutputSize * Supersample;
 	constexpr float FieldOfView = 60.0f;
 	constexpr double ScreenSpaceError = 4.0;
+	constexpr int64 TileCacheBytes = 2048LL * 1024 * 1024;
 }
 
 AAircastCamera::AAircastCamera()
@@ -91,6 +92,8 @@ void AAircastCamera::BeginPlay()
 	ACesiumGeoreference::GetDefaultGeoreference(this)->SetOriginLongitudeLatitudeHeight(HomePose);
 
 	Tileset = GetWorld()->SpawnActor<ACesium3DTileset>();
+	Tileset->ForbidHoles = true;
+	Tileset->MaximumCachedBytes = TileCacheBytes;
 	Tileset->SetTilesetSource(ETilesetSource::FromCesiumIon);
 	Tileset->SetIonAccessToken(IonToken);
 	Tileset->SetIonAssetID(GooglePhotorealisticAsset);
