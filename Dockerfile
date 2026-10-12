@@ -118,13 +118,17 @@ COPY src/ws_bridge.py /opt/aircast/ws_bridge.py
 COPY src/gimbal.parm /usr/local/share/aircast/gimbal.parm
 COPY src/serve.py /opt/aircast/serve.py
 
-# mavlink-router config: connect to SITL on 5766, expose TCP 5760 for unlimited clients
 RUN mkdir -p /etc/mavlink-router && echo '[General]\n\
 TcpServerPort=5760\n\
 \n\
 [TcpEndpoint sitl]\n\
 Address=127.0.0.1\n\
-Port=5766\n' > /etc/mavlink-router/main.conf
+Port=5766\n\
+\n\
+[UdpEndpoint gcs]\n\
+Mode=Server\n\
+Address=0.0.0.0\n\
+Port=14550\n' > /etc/mavlink-router/main.conf
 
 # Create startup script that runs SITL, mavlink-router, web server, and WebSocket bridge
 RUN echo '#!/bin/bash\n\
