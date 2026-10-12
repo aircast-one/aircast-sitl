@@ -40,7 +40,9 @@ RUN ccache --max-size=1G
 
 RUN ./waf configure --board sitl
 RUN --mount=type=cache,id=ccache,target=/root/.ccache \
-    ./waf copter plane -j$(nproc)
+    ./waf copter -j$(nproc)
+RUN --mount=type=cache,id=ccache,target=/root/.ccache \
+    ./waf plane -j$(nproc)
 
 FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend
 
