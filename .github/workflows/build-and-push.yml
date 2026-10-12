@@ -2,7 +2,7 @@ name: Build and Deploy
 
 on:
   push:
-    branches: [ master, develop ]
+    branches: [ master ]
     tags: [ 'v*' ]
   pull_request:
     branches: [ master ]
@@ -26,7 +26,7 @@ jobs:
     needs: pre_job
     if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
     runs-on: ubuntu-latest
-    environment: ${{ github.ref == 'refs/heads/develop' && 'development' || '' }}
+    environment: ${{ github.ref == 'refs/heads/master' && 'development' || '' }}
     permissions:
       contents: write
       packages: write
@@ -34,7 +34,7 @@ jobs:
 
     outputs:
       version: ${{ steps.version.outputs.version }}
-      environment: ${{ github.ref == 'refs/heads/develop' && 'development' || 'production' }}
+      environment: ${{ github.ref == 'refs/heads/master' && 'development' || 'production' }}
 
     env:
       IMAGE_BASE: ${{ github.repository }}
@@ -69,11 +69,9 @@ jobs:
             VERSION=${GITHUB_REF#refs/tags/}
             echo "version=${VERSION}-${SHORT_SHA}" >> $GITHUB_OUTPUT
             echo "is_release=true" >> $GITHUB_OUTPUT
-          elif [[ $GITHUB_REF == refs/heads/develop ]]; then
+          elif [[ $GITHUB_REF == refs/heads/master ]]; then
             echo "version=v0.0.0-dev-${SHORT_SHA}" >> $GITHUB_OUTPUT
             echo "is_develop=true" >> $GITHUB_OUTPUT
-          elif [[ $GITHUB_REF == refs/heads/master ]]; then
-            echo "version=v0.0.0-${SHORT_SHA}" >> $GITHUB_OUTPUT
           else
             echo "version=pr-${{ github.event.number }}-${SHORT_SHA}" >> $GITHUB_OUTPUT
           fi
@@ -124,7 +122,7 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    if: ${{ !cancelled() && needs.build.result == 'success' && github.ref == 'refs/heads/develop' }}
+    if: ${{ !cancelled() && needs.build.result == 'success' && github.ref == 'refs/heads/master' }}
 
     steps:
       - name: Trigger GitOps update
@@ -140,7 +138,8 @@ jobs:
               "client_payload": {
                 "app_name": "aircast-sitl",
                 "environment": "${{ needs.build.outputs.environment }}",
-                "image_tag": "${{ needs.build.outputs.version }}"
+                "image_tag": "${{ needs.build.outputs.version }}",
+                "source_ref": "${{ github.ref }}"
               }
             }'
 
