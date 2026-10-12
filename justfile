@@ -17,6 +17,8 @@ web_port  := "8888:8888"
 sitl_host      := "sitl.aircast.one"
 mediamtx_image := "bluenviron/mediamtx:1.20.1"
 chrome         := "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+unreal_root    := "/Users/Shared/Epic Games/UE_5.8"
+cesium_unreal  := "2.30.0"
 
 # List available recipes
 default:
@@ -78,7 +80,7 @@ run:
         -p {{web_port}} \
         {{full_image}}
 
-# Render the onboard camera of the SITL at `host` and serve it as rtsp://<this mac>:8554/sim (look: photoreal | satellite)
+# Render the onboard camera of the SITL at `host` and serve it as rtsp://<this mac>:8554/sim (look: photoreal | satellite | unreal)
 [group('run')]
 camera host=sitl_host look="photoreal":
     #!/usr/bin/env bash
@@ -92,17 +94,40 @@ camera host=sitl_host look="photoreal":
         -p 8554:8554 -p 8899:8889 -p 8189:8189/udp {{mediamtx_image}} >/dev/null
     MAVLINK_HOST={{host}} MAVLINK_PORT=5760 PYTHONUNBUFFERED=1 \
         uv run --quiet --no-project --with pymavlink --with websockets python src/ws_bridge.py &
-    (cd web && npm install --prefer-offline --no-audit --no-fund --silent \
-        && VITE_CESIUM_ION_TOKEN=$(gh variable get VITE_CESIUM_ION_TOKEN -R aircast-one/aircast-sitl) \
-        exec node_modules/.bin/vite --strictPort --logLevel warn) &
-    until curl -sf -o /dev/null http://localhost:5174; do sleep 1; done
-    "{{chrome}}" --headless --user-data-dir="$profile" --window-size=1280,720 \
-        --disable-features=WebRtcHideLocalIpsWithMdns \
-        --disable-background-timer-throttling --disable-renderer-backgrounding \
-        "http://localhost:5174/camera?look={{look}}&whip=http://localhost:8899/sim/whip" 2>/dev/null &
+    token=$(gh variable get VITE_CESIUM_ION_TOKEN -R aircast-one/aircast-sitl)
+    if [ "{{look}}" = unreal ]; then
+        just unreal-build
+        "{{unreal_root}}/Engine/Binaries/Mac/UnrealEditor.app/Contents/MacOS/UnrealEditor" \
+            "$PWD/unreal/AircastSim.uproject" -game -windowed -ResX=1280 -ResY=720 -log \
+            -Telemetry=ws://127.0.0.1:8889 -Rtsp=rtsp://127.0.0.1:8554/sim -IonToken="$token" &
+    else
+        (cd web && npm install --prefer-offline --no-audit --no-fund --silent \
+            && VITE_CESIUM_ION_TOKEN="$token" exec node_modules/.bin/vite --strictPort --logLevel warn) &
+        until curl -sf -o /dev/null http://localhost:5174; do sleep 1; done
+        "{{chrome}}" --headless --user-data-dir="$profile" --window-size=1280,720 \
+            --disable-features=WebRtcHideLocalIpsWithMdns \
+            --disable-background-timer-throttling --disable-renderer-backgrounding \
+            "http://localhost:5174/camera?look={{look}}&whip=http://localhost:8899/sim/whip" 2>/dev/null &
+    fi
     echo "Vehicle: TCP {{host}}:5760"
     echo "Camera:  rtsp://$(ipconfig getifaddr en0):8554/sim"
     wait
+
+# Fetch the pinned Cesium for Unreal and build the Unreal camera project
+[group('build')]
+unreal-build:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    plugins="{{unreal_root}}/Engine/Plugins/Marketplace"
+    if ! grep -q '"VersionName": "{{cesium_unreal}}"' "$plugins/CesiumForUnreal/CesiumForUnreal.uplugin" 2>/dev/null; then
+        rm -rf "$plugins/CesiumForUnreal"
+        mkdir -p "$plugins"
+        gh release download v{{cesium_unreal}} -R CesiumGS/cesium-unreal -p "CesiumForUnreal-58-v{{cesium_unreal}}.zip" -O "$plugins/cesium.zip" --clobber
+        unzip -q "$plugins/cesium.zip" -d "$plugins"
+        rm "$plugins/cesium.zip"
+    fi
+    cd unreal
+    "{{unreal_root}}/Engine/Build/BatchFiles/Mac/Build.sh" AircastSimEditor Mac Development -Project="$PWD/AircastSim.uproject" -WaitMutex
 
 # Stop the running SITL container
 [group('run')]

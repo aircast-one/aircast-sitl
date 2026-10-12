@@ -149,6 +149,13 @@ Add a TCP connection to `localhost:5760`
 `rtsp://<this mac>:8554/sim`. `just camera <host> satellite` falls back to flat Esri imagery on Cesium
 terrain.
 
+`just camera <host> unreal` renders the same tiles in Unreal Engine 5.8 with Cesium for Unreal (sky
+atmosphere, physical sun, filmic tone mapping) and pushes 1280×720 frames through ffmpeg
+(VideoToolbox H.264) to the same RTSP address at ~30 fps. It needs Unreal Engine 5.8 from the Epic
+Games Launcher and Xcode's Metal toolchain (`xcodebuild -downloadComponent MetalToolchain`; without
+it Unreal stops at startup behind an alert). `just unreal-build` installs the pinned Cesium for
+Unreal into the engine and compiles `unreal/`. The first launch compiles shaders for a few minutes.
+
 In the Aircast app, add a TCP link to `sitl.aircast.one:5760` and a camera with the printed RTSP
 address. `just camera <host>` follows another SITL. Needs Docker, uv, gh and Google Chrome.
 
