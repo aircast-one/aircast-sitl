@@ -60,7 +60,7 @@ while true; do
         *)
             binary=arducopter
             model=copter
-            defaults="$DEFAULT_PARAMS/copter.parm,$AIRCAST_PARAMS/gimbal.parm,$AIRCAST_PARAMS/pilot.parm"
+            defaults="$DEFAULT_PARAMS/copter.parm,$AIRCAST_PARAMS/gimbal.parm,$AIRCAST_PARAMS/airframe.parm,$AIRCAST_PARAMS/pilot.parm"
             ;;
     esac
     model="${SITL_MODEL:-$model}"

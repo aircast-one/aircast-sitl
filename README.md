@@ -134,6 +134,28 @@ connected, with the ground elevation looked up from [Open-Meteo](https://open-me
 `POST /api/home` with `{"lat": 41.7151, "lng": 44.8271}` does the same from a script. The location
 resets to the ArduPilot default (CMAC, Canberra) when the container restarts.
 
+## Stick feel
+
+The copter flies by [`src/pilot.parm`](src/pilot.parm): 10 m/s and 45° in Loiter, 5 m/s climb, braking
+with no delay. Load the same file on the real drone so a flight rehearsed here handles the same in
+the air: Mission Planner's Full Parameter List → Load from file, or `param load pilot.parm` in
+MAVProxy. It uses ArduCopter 4.5 parameter names, as the SITL does. Check that the real airframe
+holds altitude at 45° before flying it hard. [`src/airframe.parm`](src/airframe.parm) tunes yaw for
+the simulated airframe only; never load it on a real drone.
+
+Measured in Loiter, from a stick step to the response:
+
+| Stick | Response |
+|---|---|
+| Forward, half | 12° lean at 0.2 s, 2.4 m/s at 1 s, 3.7 m/s at 3 s |
+| Forward, full | 0.5 m/s at 0.22 s, 5.9 m/s at 1 s, 9.4 m/s at 3 s |
+| Released at full speed | stopped in 1.2 s |
+| Yaw, full | turning within 55–90 ms, 90% of full rate at 0.4–0.45 s |
+| Throttle, full | 0.3 m/s climb at 0.45 s, 4.1 m/s at 2 s |
+
+Loiter turns the stick into a lean angle, so speed builds toward its limit with a time constant of
+`LOIT_SPEED` / (g · tan `LOIT_ANG_MAX`), about 1 s here. A lower top speed or a steeper lean shortens it.
+
 ## License
 
 GPL-3.0, the same as the ArduPilot it builds. See [LICENSE](LICENSE).
