@@ -156,6 +156,11 @@ Measured in Loiter, from a stick step to the response:
 Loiter turns the stick into a lean angle, so speed builds toward its limit with a time constant of
 `LOIT_SPEED` / (g · tan `LOIT_ANG_MAX`), about 1 s here. A lower top speed or a steeper lean shortens it.
 
+Acro flies on the rate loop alone (`ACRO_OPTIONS` 2). With ArduCopter's attitude hold on, releasing
+the yaw stick swung the nose back by 29–52% of the turn rate and took 0.7–0.9 s to settle. On the rate
+loop alone, with the simulated airframe's `ATC_RAT_YAW_P` at 0.8, a half-stick yaw reaches 90% of its
+rate in 0.2 s and stops within 0.2 s, with no swing back.
+
 ## License
 
 GPL-3.0, the same as the ArduPilot it builds. See [LICENSE](LICENSE).
