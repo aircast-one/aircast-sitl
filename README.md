@@ -140,8 +140,14 @@ The copter flies by [`src/pilot.parm`](src/pilot.parm): 10 m/s and 45° in Loite
 with no delay. Load the same file on the real drone so a flight rehearsed here handles the same in
 the air: Mission Planner's Full Parameter List → Load from file, or `param load pilot.parm` in
 MAVProxy. It uses ArduCopter 4.5 parameter names, as the SITL does. Check that the real airframe
-holds altitude at 45° before flying it hard. [`src/airframe.parm`](src/airframe.parm) tunes yaw for
-the simulated airframe only; never load it on a real drone.
+holds altitude at 45° before flying it hard.
+
+The simulated copter is a 5" FPV-sized quad, [`src/racer.json`](src/racer.json): 0.65 kg, 0.22 m,
+hovering at 16% throttle with no motor slew limit, so it feels like a racer rather than a 3 kg camera
+drone. [`src/airframe.parm`](src/airframe.parm) holds its ArduCopter AutoTune gains (yaw acceleration
+limit left off); never load it on a real drone. Against the stock 3 kg SITL quad, a half-stick Acro
+roll reaches 90% of its rate in 60–110 ms instead of ~200 ms, and full throttle climbs at 35–38 m/s²
+instead of 10.5 m/s². Yaw is about the same, 200–230 ms, limited by the frame's yaw authority.
 
 Measured in Loiter, from a stick step to the response:
 
