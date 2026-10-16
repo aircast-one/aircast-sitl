@@ -38,6 +38,9 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 RUN ccache --max-size=1G
 
+COPY src/ardupilot/ /patches/
+RUN git apply /patches/*.patch
+
 RUN ./waf configure --board sitl
 RUN --mount=type=cache,id=ccache,target=/root/.ccache \
     ./waf copter -j$(nproc)

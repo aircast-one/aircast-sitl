@@ -159,6 +159,12 @@ Measured in Loiter, from a stick step to the response:
 | Yaw, full | turning within 55–90 ms, 90% of full rate at 0.4–0.45 s |
 | Throttle, full | 0.3 m/s climb at 0.45 s, 4.1 m/s at 2 s |
 
+Loiter here holds the heading while the yaw stick is centred
+([`src/ardupilot/loiter-holds-heading.patch`](src/ardupilot/loiter-holds-heading.patch)). Stock
+ArduCopter Loiter only holds the yaw rate, so swinging the lean around at 45° turns the nose: three
+full right-stick circles turned it 116°, against 0° with the patch. A real drone flies stock Loiter
+until it runs a build with the same patch.
+
 Loiter turns the stick into a lean angle, so speed builds toward its limit with a time constant of
 `LOIT_SPEED` / (g · tan `LOIT_ANG_MAX`), about 1 s here. A lower top speed or a steeper lean shortens it.
 
