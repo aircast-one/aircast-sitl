@@ -387,6 +387,11 @@ function ConnectPanel({ host }: { host: string }) {
   const rows = [
     { label: "Aircast · QGC · Mission Planner", hint: "TCP", value: `${host}:5760` },
     { label: "QGroundControl", hint: "UDP", value: `${host}:14550` },
+    {
+      label: "Aircast in the browser",
+      hint: "WebSocket",
+      value: window.location.protocol === "https:" ? `wss://${host}/ws/mavlink` : `ws://${host}:8889/ws/mavlink`,
+    },
     { label: "MAVProxy", hint: "CLI", value: `mavproxy.py --master=tcp:${host}:5760` },
     { label: "Python MAVLink", hint: "pymavlink", value: `mavutil.mavlink_connection("tcp:${host}:5760")` },
   ];

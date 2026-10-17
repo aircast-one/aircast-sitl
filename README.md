@@ -111,8 +111,9 @@ Games Launcher and Xcode's Metal toolchain (`xcodebuild -downloadComponent Metal
 it Unreal stops at startup behind an alert). `just unreal-build` installs the pinned Cesium for
 Unreal into the engine and compiles `unreal/`. The first launch compiles shaders for a few minutes.
 
-In the Aircast app, add a TCP link to `sitl.aircast.one:5760` and a camera with the printed RTSP
-address. `just camera <host>` follows another SITL. Needs Docker, uv, gh and Google Chrome.
+In the Aircast app, add a TCP link to `sitl.aircast.one:5760` (in the browser at fly.aircast.one, a
+Network link to `wss://sitl.aircast.one/ws/mavlink`) and a camera with the printed RTSP address.
+`just camera <host>` follows another SITL. Needs Docker, uv, gh and Google Chrome.
 
 ## Ports
 
@@ -120,6 +121,7 @@ address. `just camera <host>` follows another SITL. Needs Docker, uv, gh and Goo
 |---------|-----------|-----------|
 | MAVLink | 5760-5765 | 14550-14555 |
 | FlightGear | 9005 | - |
+| MAVLink over WebSocket | 8889 (`/ws/mavlink`) | - |
 
 ## Vehicles
 

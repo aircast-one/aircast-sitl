@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import json
 import math
 import os
@@ -10,6 +11,7 @@ from pymavlink import mavutil
 WANTED_TYPES = {'HEARTBEAT', 'ATTITUDE', 'GLOBAL_POSITION_INT', 'VFR_HUD', 'GIMBAL_DEVICE_ATTITUDE_STATUS'}
 YAW_IN_EARTH_FRAME = 64
 STREAM_SILENCE_S = 3
+MAVLINK_PATH = '/ws/mavlink'
 
 
 def msg_to_json(msg):
@@ -91,7 +93,28 @@ def connect_mavlink(host, port):
 clients = set()
 
 
-async def ws_handler(websocket):
+async def mavlink_pipe(websocket, host, port):
+    reader, writer = await asyncio.open_connection(host, port)
+
+    async def tcp_to_socket():
+        while data := await reader.read(65536):
+            await websocket.send(data)
+        await websocket.close()
+
+    async def socket_to_tcp():
+        try:
+            async for message in websocket:
+                writer.write(message)
+                await writer.drain()
+        finally:
+            writer.close()
+
+    await asyncio.gather(tcp_to_socket(), socket_to_tcp(), return_exceptions=True)
+
+
+async def ws_handler(websocket, mavlink_host, mavlink_port):
+    if websocket.request.path == MAVLINK_PATH:
+        return await mavlink_pipe(websocket, mavlink_host, mavlink_port)
     clients.add(websocket)
     addr = websocket.remote_address
     print(f'WebSocket client connected: {addr}')
@@ -147,8 +170,9 @@ async def main():
     mavlink_port = int(os.environ.get('MAVLINK_PORT', '5762'))
     ws_port = int(os.environ.get('WS_PORT', '8889'))
 
-    async with websockets.serve(ws_handler, '0.0.0.0', ws_port):
-        print(f'WebSocket MAVLink bridge on ws://0.0.0.0:{ws_port}')
+    handler = functools.partial(ws_handler, mavlink_host=mavlink_host, mavlink_port=mavlink_port)
+    async with websockets.serve(handler, '0.0.0.0', ws_port):
+        print(f'WebSocket MAVLink bridge on ws://0.0.0.0:{ws_port}, raw MAVLink on {MAVLINK_PATH}')
         await mavlink_reader(mavlink_host, mavlink_port)
 
 

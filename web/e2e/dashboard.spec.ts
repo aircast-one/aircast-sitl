@@ -26,6 +26,28 @@ test.describe("Dashboard Page", () => {
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`mavproxy.py --master=tcp:${host}:5760`);
   });
 
+  test("the WebSocket address carries raw MAVLink for the browser app", async ({ page }) => {
+    await page.goto("/");
+    const host = await page.evaluate(() => location.hostname);
+    const address = `ws://${host}:8889/ws/mavlink`;
+    await expect(page.getByText(address, { exact: true })).toBeVisible();
+
+    const firstByte = await page.evaluate(
+      (url) =>
+        new Promise<number>((resolve, reject) => {
+          const socket = new WebSocket(url);
+          socket.binaryType = "arraybuffer";
+          socket.onmessage = ({ data }) => {
+            socket.close();
+            resolve(new Uint8Array(data as ArrayBuffer)[0]);
+          };
+          socket.onerror = () => reject(new Error(`No WebSocket at ${url}`));
+        }),
+      address,
+    );
+    expect(firstByte).toBe(0xfd);
+  });
+
   test("the 3D view link opens the FPV page", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("link", { name: "3D view" }).click();
