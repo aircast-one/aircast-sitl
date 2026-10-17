@@ -1,0 +1,6 @@
+include ../CUAV-X7/hwdef.dat
+include ../include/SimOnHW.inc
+
+define CHIBIOS_SHORT_BOARD_NAME "CUAV-X7-SimOnHardWare"
+
+define AP_BOOTLOADER_FLASHING_ENABLED 0

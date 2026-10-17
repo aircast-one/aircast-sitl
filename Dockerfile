@@ -47,6 +47,19 @@ RUN --mount=type=cache,id=ccache,target=/root/.ccache \
 RUN --mount=type=cache,id=ccache,target=/root/.ccache \
     ./waf plane -j$(nproc)
 
+FROM builder AS cuav-x7-sim-build
+RUN --mount=type=cache,target=/var/cache/apt \
+    apt-get update \
+ && apt-get install -y --no-install-recommends libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib \
+ && rm -rf /var/lib/apt/lists/*
+COPY src/hwdef/ libraries/AP_HAL_ChibiOS/hwdef/
+RUN ./waf configure --board CUAV-X7-SimOnHardWare
+RUN --mount=type=cache,id=ccache,target=/root/.ccache \
+    ./waf copter -j$(nproc)
+
+FROM scratch AS cuav-x7-sim
+COPY --from=cuav-x7-sim-build /src/build/CUAV-X7-SimOnHardWare/bin/arducopter.apj /
+
 FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend
 
 ARG VITE_CESIUM_ION_TOKEN=""

@@ -32,6 +32,11 @@ build:
     docker build -t {{full_image}} .
     @echo "✅ Build complete: {{full_image}}"
 
+# Build CUAV-X7 firmware that flies this simulator's physics on the board itself, into dist/
+[group('build')]
+hil-firmware:
+    docker build --target cuav-x7-sim --output type=local,dest=dist .
+
 # Build the image for ARM64 (Apple Silicon, Raspberry Pi)
 [group('build')]
 build-arm64:
