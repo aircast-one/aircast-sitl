@@ -1,0 +1,7 @@
+@include ../../../../Tools/autotest/default_params/copter.parm
+AHRS_EKF_TYPE 10
+GPS_TYPE 100
+COMPASS_PRIO1_ID 97539
+BRD_SAFETY_DEFLT 0
+BATT_MONITOR 0
+FS_THR_ENABLE 0
