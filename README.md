@@ -175,6 +175,9 @@ the yaw stick swung the nose back by 29–52% of the turn rate and took 0.7–0.
 loop alone, with the simulated airframe's `ATC_RAT_YAW_P` at 0.8, a half-stick yaw reaches 90% of its
 rate in 0.2 s and stops within 0.2 s, with no swing back.
 
+Acro has no trainer (`ACRO_TRAINER` 0): released sticks hold the attitude instead of levelling the
+copter, and roll and pitch are not capped at `ANGLE_MAX`.
+
 ## License
 
 GPL-3.0, the same as the ArduPilot it builds. See [LICENSE](LICENSE).
