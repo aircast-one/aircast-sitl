@@ -12,7 +12,11 @@ VFOV_DEG = math.degrees(2 * math.atan(math.tan(math.radians(HFOV_DEG / 2)) * RES
 FOCAL_MM = 4.0
 SENSOR_H_MM = 2 * FOCAL_MM * math.tan(math.radians(HFOV_DEG / 2))
 SENSOR_V_MM = SENSOR_H_MM * RESOLUTION[1] / RESOLUTION[0]
-FLAGS = MAV.CAMERA_CAP_FLAGS_HAS_TRACKING_POINT | MAV.CAMERA_CAP_FLAGS_HAS_TRACKING_RECTANGLE
+FLAGS = (
+    MAV.CAMERA_CAP_FLAGS_HAS_TRACKING_POINT
+    | MAV.CAMERA_CAP_FLAGS_HAS_TRACKING_RECTANGLE
+    | MAV.CAMERA_CAP_FLAGS_HAS_TRACKING_GEO_STATUS
+)
 GIMBAL_DEVICE = 1
 GAIN_PER_S = 2.0
 HEARTBEAT_S = 1.0
@@ -21,6 +25,10 @@ BOX_STALE_S = 1.0
 LOST_S = 3.0
 TICK_S = 0.01
 TRACK_COMMANDS = (MAV.MAV_CMD_CAMERA_TRACK_POINT, MAV.MAV_CMD_CAMERA_TRACK_RECTANGLE)
+INTERVALS = {
+    MAV.MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS: 'status_s',
+    MAV.MAVLINK_MSG_ID_CAMERA_TRACKING_GEO_STATUS: 'geo_s',
+}
 
 
 def padded(text, size):
@@ -114,6 +122,24 @@ def send_status(conn, box, tracking):
     )
 
 
+def send_geo(conn, car):
+    conn.mav.camera_tracking_geo_status_send(
+        MAV.CAMERA_TRACKING_STATUS_FLAGS_ACTIVE,
+        car.lat,
+        car.lon,
+        car.alt / 1000,
+        math.nan,
+        math.nan,
+        car.vx / 100,
+        car.vy / 100,
+        car.vz / 100,
+        math.nan,
+        math.nan,
+        math.radians(car.hdg / 100),
+        math.nan,
+    )
+
+
 def answer(conn, msg, state, box):
     command, p = msg.command, (msg.param1, msg.param2, msg.param3, msg.param4)
     asked_info = command == MAV.MAV_CMD_REQUEST_CAMERA_INFORMATION or (
@@ -121,8 +147,8 @@ def answer(conn, msg, state, box):
     )
     if asked_info:
         result = MAV.MAV_RESULT_ACCEPTED
-    elif command == MAV.MAV_CMD_SET_MESSAGE_INTERVAL and int(p[0]) == MAV.MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS:
-        state['status_s'] = None if p[1] < 0 else max(p[1], 100_000) / 1e6
+    elif command == MAV.MAV_CMD_SET_MESSAGE_INTERVAL and int(p[0]) in INTERVALS:
+        state[INTERVALS[int(p[0])]] = None if p[1] < 0 else max(p[1], 100_000) / 1e6
         result = MAV.MAV_RESULT_ACCEPTED
     elif command in TRACK_COMMANDS:
         state['tracking'] = picks(box, command, p)
@@ -143,13 +169,18 @@ def answer(conn, msg, state, box):
 
 async def run(host, port, car_box):
     conn = await asyncio.to_thread(connect, host, port)
-    state = {'tracking': False, 'status_s': None, 'seen_at': 0.0, 'beat_at': 0.0, 'steered_at': 0.0, 'status_at': 0.0}
+    state = {
+        'tracking': False, 'status_s': None, 'geo_s': None, 'car': None,
+        'seen_at': 0.0, 'beat_at': 0.0, 'steered_at': 0.0, 'status_at': 0.0, 'geo_at': 0.0,
+    }
     while True:
         now = time.monotonic()
         box, boxed_at = car_box()
         fresh = box if now - boxed_at < BOX_STALE_S else None
-        while msg := conn.recv_match(type='COMMAND_LONG', blocking=False):
-            if msg.target_system == conn.mav.srcSystem and msg.target_component == COMPONENT:
+        while msg := conn.recv_match(type=['COMMAND_LONG', 'GLOBAL_POSITION_INT'], blocking=False):
+            if msg.get_type() == 'GLOBAL_POSITION_INT':
+                state['car'] = msg if msg.get_srcSystem() != conn.target_system else state['car']
+            elif msg.target_system == conn.mav.srcSystem and msg.target_component == COMPONENT:
                 answer(conn, msg, state, fresh)
         if now - state['beat_at'] >= HEARTBEAT_S:
             conn.mav.heartbeat_send(MAV.MAV_TYPE_CAMERA, MAV.MAV_AUTOPILOT_INVALID, 0, 0, MAV.MAV_STATE_ACTIVE)
@@ -166,4 +197,7 @@ async def run(host, port, car_box):
         if state['status_s'] and now - state['status_at'] >= state['status_s']:
             send_status(conn, fresh, state['tracking'])
             state['status_at'] = now
+        if state['geo_s'] and state['tracking'] and state['car'] and now - state['geo_at'] >= state['geo_s']:
+            send_geo(conn, state['car'])
+            state['geo_at'] = now
         await asyncio.sleep(TICK_S)
