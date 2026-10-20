@@ -134,6 +134,15 @@ the car at 20 m/s from a standstill: on its spot in about 40 s, then within 2 m,
 29 m off it through the turn at the end of the road. Loiter tops out at 10 m/s, so a hand-flown
 chase needs the car at 10 m/s or less, or Acro.
 
+`just camera` also makes the camera a MAVLink tracking camera (component 100 of the vehicle,
+[`src/camera.py`](src/camera.py)), so the Aircast app's Track something works on it: draw a box
+around the car on the video, or tap it. The camera page reports where it draws the car, the camera
+refuses a box or tap that misses it, and once locked it steers the gimbal to keep the car centred
+and reports the box for the app to draw. It is a perfect tracker: it never drifts, and it loses the
+car only when the car leaves the frame for 3 s. From a hover at 30 m it held the car within 3% of
+the frame centre while it drove from 110 m to 690 m away. Only the browser look reports the car for
+now; the Unreal look does not track.
+
 `web/public/models/car.glb` is the Cesium Milk Truck, © 2017 Cesium, under
 [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/). Unreal draws a box van from the engine's
 basic shapes.

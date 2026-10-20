@@ -71,6 +71,11 @@ interface MavlinkMessage {
   [key: string]: unknown;
 }
 
+export function bridgeUrl() {
+  const wsHost = window.location.hostname || "localhost";
+  return window.location.protocol === "https:" ? `wss://${wsHost}/ws` : `ws://${wsHost}:8889`;
+}
+
 export function useTelemetry() {
   const [telemetry, setTelemetry] = useState<Telemetry>(initialTelemetry);
   const telemetryRef = useRef<Telemetry>(initialTelemetry);
@@ -137,12 +142,7 @@ export function useTelemetry() {
   }, []);
 
   const connect = useCallback(() => {
-    const isSecure = window.location.protocol === "https:";
-    const wsHost = window.location.hostname || "localhost";
-    const wsUrl = isSecure
-      ? `wss://${wsHost}/ws`
-      : `ws://${wsHost}:8889`;
-    const ws = new WebSocket(wsUrl);
+    const ws = new WebSocket(bridgeUrl());
     wsRef.current = ws;
 
     ws.onopen = () => {

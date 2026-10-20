@@ -114,6 +114,7 @@ COPY --from=builder /src/Tools/autotest/models/plane.parm /usr/local/share/ardup
 COPY --from=frontend /app/dist /var/www/html/
 
 COPY src/ws_bridge.py /opt/aircast/ws_bridge.py
+COPY src/camera.py /opt/aircast/camera.py
 COPY src/gimbal.parm /usr/local/share/aircast/gimbal.parm
 COPY src/pilot.parm /usr/local/share/aircast/pilot.parm
 COPY src/airframe.parm /usr/local/share/aircast/airframe.parm

@@ -8,6 +8,8 @@ import time
 import websockets
 from pymavlink import mavutil
 
+import camera
+
 WANTED_TYPES = {'HEARTBEAT', 'ATTITUDE', 'GLOBAL_POSITION_INT', 'VFR_HUD', 'GIMBAL_DEVICE_ATTITUDE_STATUS'}
 YAW_IN_EARTH_FRAME = 64
 STREAM_SILENCE_S = 3
@@ -98,6 +100,21 @@ def connect_mavlink(host, port):
 
 
 clients = set()
+car_box = {'box': None, 'at': 0.0}
+
+
+def report_from(message):
+    try:
+        report = json.loads(message)
+    except ValueError:
+        return None
+    return report if isinstance(report, dict) else None
+
+
+def note_car_box(report):
+    box = report.get('box')
+    valid = isinstance(box, list) and len(box) == 4 and all(type(v) in (int, float) for v in box)
+    car_box.update(box=box if valid else None, at=time.monotonic())
 
 
 async def mavlink_pipe(websocket, host, port):
@@ -126,8 +143,10 @@ async def ws_handler(websocket, mavlink_host, mavlink_port):
     addr = websocket.remote_address
     print(f'WebSocket client connected: {addr}')
     try:
-        async for _ in websocket:
-            pass
+        async for message in websocket:
+            report = report_from(message)
+            if report and report.get('type') == 'CAR_BOX':
+                note_car_box(report)
     except websockets.ConnectionClosed:
         pass
     finally:
@@ -180,7 +199,10 @@ async def main():
     handler = functools.partial(ws_handler, mavlink_host=mavlink_host, mavlink_port=mavlink_port)
     async with websockets.serve(handler, '0.0.0.0', ws_port):
         print(f'WebSocket MAVLink bridge on ws://0.0.0.0:{ws_port}, raw MAVLink on {MAVLINK_PATH}')
-        await mavlink_reader(mavlink_host, mavlink_port)
+        tasks = [mavlink_reader(mavlink_host, mavlink_port)]
+        if os.environ.get('SIM_CAMERA') == '1':
+            tasks.append(camera.run(mavlink_host, mavlink_port, lambda: (car_box['box'], car_box['at'])))
+        await asyncio.gather(*tasks)
 
 
 if __name__ == '__main__':

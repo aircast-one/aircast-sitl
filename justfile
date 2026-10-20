@@ -98,7 +98,7 @@ camera host=sitl_host look="photoreal":
         -e MTX_RTMP=no -e MTX_HLS=no -e MTX_SRT=no -e MTX_RTSPTRANSPORTS=tcp \
         -e MTX_WEBRTCADDITIONALHOSTS=127.0.0.1 \
         -p 8554:8554 -p 8899:8889 -p 8189:8189/udp {{mediamtx_image}} >/dev/null
-    MAVLINK_HOST={{host}} MAVLINK_PORT=5760 PYTHONUNBUFFERED=1 \
+    MAVLINK_HOST={{host}} MAVLINK_PORT=5760 PYTHONUNBUFFERED=1 MAVLINK20=1 SIM_CAMERA=1 \
         uv run --quiet --no-project --with pymavlink --with websockets python src/ws_bridge.py &
     token=$(gh variable get VITE_CESIUM_ION_TOKEN -R aircast-one/aircast-sitl)
     if [ "{{look}}" = unreal ]; then
