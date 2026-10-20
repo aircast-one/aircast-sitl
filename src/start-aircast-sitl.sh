@@ -2,6 +2,7 @@
 
 VEHICLE_FILE=/var/lib/aircast/vehicle
 HOME_FILE=/var/lib/aircast/home
+PARAMS_FILE=/var/lib/aircast/params.parm
 DEFAULT_PARAMS=/usr/local/share/ardupilot/default_params
 MODEL_PARAMS=/usr/local/share/ardupilot/models
 AIRCAST_PARAMS=/usr/local/share/aircast
@@ -63,6 +64,9 @@ while true; do
             defaults="$DEFAULT_PARAMS/copter.parm,$AIRCAST_PARAMS/gimbal.parm,$AIRCAST_PARAMS/airframe.parm,$AIRCAST_PARAMS/pilot.parm"
             ;;
     esac
+    if [ -s "$PARAMS_FILE" ]; then
+        defaults="$defaults,$PARAMS_FILE"
+    fi
     model="${SITL_MODEL:-$model}"
     home=$(cat "$HOME_FILE" 2>/dev/null || true)
     echo "Starting $binary SITL ($vehicle) with args: ${ARGS[*]} -M $model --defaults $defaults ${home:+--home $home}"

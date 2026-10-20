@@ -1,10 +1,11 @@
 import { test, expect } from "@playwright/test";
+import { readParam } from "./param.ts";
 
 test.describe("Dashboard Page", () => {
   test("renders the top bar and the operator panels", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "Aircast SITL" })).toBeVisible();
-    for (const panel of ["Airframe", "Location", "Telemetry", "Connect", "Views"]) {
+    for (const panel of ["Airframe", "Location", "Parameters", "Telemetry", "Connect", "Views"]) {
       await expect(page.getByRole("heading", { name: panel, exact: true })).toBeVisible();
     }
   });
@@ -103,6 +104,33 @@ test.describe("Dashboard Page", () => {
   test("the location API rejects coordinates off the globe", async ({ request }) => {
     const res = await request.post("/api/home", { data: { lat: 91, lng: 0 } });
     expect(res.status()).toBe(400);
+  });
+
+  test("parameters set on the dashboard reach the autopilot when the SITL restarts", async ({ page, request }) => {
+    test.setTimeout(120_000);
+    await request.post("/api/params", { data: { params: {} } });
+    await page.goto("/");
+    const panel = page.locator("section", { has: page.getByRole("heading", { name: "Parameters", exact: true }) });
+    const editor = panel.getByRole("textbox", { name: "Parameters" });
+    const apply = panel.getByRole("button", { name: "Apply" });
+
+    await expect(panel.getByText("0 set")).toBeVisible();
+    await expect(apply).toBeDisabled();
+    await editor.fill("SIM_WIND_SPD 7\n# from the west\nsim_wind_dir, 270");
+    await apply.click();
+    await expect(panel.getByText("2 set")).toBeVisible({ timeout: 20_000 });
+    expect(await (await request.get("/api/params")).json()).toEqual({ params: { SIM_WIND_SPD: 7, SIM_WIND_DIR: 270 } });
+    expect(await readParam("SIM_WIND_SPD")).toBe(7);
+    expect(await readParam("SIM_WIND_DIR")).toBe(270);
+
+    await request.post("/api/params", { data: { params: {} } });
+    expect(await readParam("SIM_WIND_SPD")).toBe(0);
+  });
+
+  test("the parameters API rejects what ArduPilot would not load", async ({ request }) => {
+    const rejected = [{ SIM_WIND_SPD: "7" }, { "sim wind": 7 }, { SIM_WIND_SPD_TOO_LONG: 7 }, { SIM_WIND_SPD: true }];
+    const statuses = await Promise.all(rejected.map(async (params) => (await request.post("/api/params", { data: { params } })).status()));
+    expect(statuses).toEqual(rejected.map(() => 400));
   });
 
   test("lists the ports the simulator exposes", async ({ page }) => {

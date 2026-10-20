@@ -136,6 +136,16 @@ connected, with the ground elevation looked up from [Open-Meteo](https://open-me
 `POST /api/home` with `{"lat": 41.7151, "lng": 44.8271}` does the same from a script. The location
 resets to the ArduPilot default (CMAC, Canberra) when the container restarts.
 
+## Parameters
+
+The Parameters panel on the dashboard sets ArduPilot parameters the simulator starts with, one
+`NAME value` per line: wind (`SIM_WIND_SPD`, `SIM_WIND_DIR`), battery (`SIM_BATT_VOLTAGE`), sensor
+failures (`SIM_GPS_DISABLE`), failsafes or tuning. They are laid over the airframe's own defaults, so
+they win, and the SITL restarts with them for everyone connected. They stay through every reset and
+vehicle switch, until the container restarts. A parameter the current vehicle lacks is ignored.
+`POST /api/params` with `{"params": {"SIM_WIND_SPD": 7}}` does the same from a script and replaces the
+whole set; `{"params": {}}` clears it.
+
 ## Stick feel
 
 The copter flies by [`src/pilot.parm`](src/pilot.parm): 10 m/s and 45° in Loiter, 5 m/s climb, braking

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { ArrowUpRight, Check, Copy, LoaderCircle, MapPin, RotateCcw } from "lucide-react";
+import { ArrowUpRight, Check, Copy, LoaderCircle, MapPin, RotateCcw, SlidersHorizontal } from "lucide-react";
 import { useTelemetry, type Telemetry } from "@/hooks/useTelemetry.ts";
 import { AirframeIcon, type AirframeId } from "@/components/Airframe.tsx";
 import { Attitude } from "@/components/Attitude.tsx";
@@ -19,9 +19,10 @@ const airframes = [
 ] as const satisfies readonly { id: AirframeId; label: string; firmware: string; sub: string; modes: "copter" | "plane" }[];
 
 type LinkState = "live" | "waiting" | "offline";
-type Restart = AirframeId | "reset" | "home";
+type Restart = AirframeId | "reset" | "home" | "params";
 type RestartError = { target: Restart; text: string };
 type Home = LatLng & { alt: number };
+type Params = Record<string, number>;
 
 const COORDINATES = /^\s*(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)\s*$/;
 
@@ -32,6 +33,23 @@ function parseCoordinates(text: string): LatLng | null {
 }
 
 const formatCoordinates = ({ lat, lng }: LatLng) => `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+
+const PARAM_LINE = /^([A-Za-z]\w*)[\s,=]+(\S+)$/;
+
+function parseParams(text: string): Params | null {
+  const entries = text
+    .split("\n")
+    .map((line) => line.replace(/#.*/, "").trim())
+    .filter(Boolean)
+    .map((line) => PARAM_LINE.exec(line))
+    .map((match) => (match && Number.isFinite(Number(match[2])) ? ([match[1].toUpperCase(), Number(match[2])] as const) : null));
+  return entries.every((entry) => entry !== null) ? Object.fromEntries(entries) : null;
+}
+
+const formatParams = (params: Params) =>
+  Object.entries(params)
+    .map(([name, value]) => `${name} ${value}`)
+    .join("\n");
 
 function useNow(intervalMs: number) {
   const [now, setNow] = useState(() => Date.now());
@@ -53,6 +71,7 @@ export function DashboardPage() {
   const link = linkState(telemetry, now);
   const [airframe, setAirframe] = useState<AirframeId | null>(null);
   const [home, setHome] = useState<Home | null>(null);
+  const [params, setParams] = useState<Params | null>(null);
   const [switching, setSwitching] = useState<Restart | null>(null);
   const [error, setError] = useState<RestartError | null>(null);
   const host = window.location.hostname || "localhost";
@@ -65,6 +84,10 @@ export function DashboardPage() {
     fetch("/api/home")
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => data && setHome(data))
+      .catch(() => undefined);
+    fetch("/api/params")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => data?.params && setParams(data.params))
       .catch(() => undefined);
   }, []);
 
@@ -109,6 +132,19 @@ export function DashboardPage() {
     if (moved) setHome(moved);
   };
 
+  const handleParams = async (next: Params) => {
+    const applied = await restart("params", () =>
+      fetch("/api/params", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ params: next }),
+      }),
+    );
+    if (applied) setParams(applied.params);
+  };
+
+  const errorFor = (targets: readonly Restart[]) => (error && targets.includes(error.target) ? error.text : null);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border/60">
@@ -128,7 +164,7 @@ export function DashboardPage() {
           <AirframePanel
             airframe={airframe}
             switching={switching}
-            error={error?.target === "home" ? null : error?.text ?? null}
+            error={errorFor(["reset", ...airframes.map((a) => a.id)])}
             telemetry={telemetry}
             link={link}
             onSelect={handleAirframe}
@@ -137,9 +173,10 @@ export function DashboardPage() {
           <LocationPanel
             home={home}
             switching={switching}
-            error={error?.target === "home" ? error.text : null}
+            error={errorFor(["home"])}
             onMove={handleHome}
           />
+          <ParamsPanel params={params} switching={switching} error={errorFor(["params"])} onApply={handleParams} />
           <TelemetryPanel telemetry={telemetry} live={link === "live"} />
         </div>
         <aside className="flex min-w-0 flex-col gap-4">
@@ -317,6 +354,58 @@ function LocationPanel({
       </form>
       <p className="mt-3 text-xs text-muted-foreground">
         Click the map, search a place or paste coordinates. Moving restarts the simulator for everyone connected.
+        {error && <span className="ml-1 text-destructive">{error}</span>}
+      </p>
+    </Panel>
+  );
+}
+
+function ParamsPanel({
+  params,
+  switching,
+  error,
+  onApply,
+}: {
+  params: Params | null;
+  switching: Restart | null;
+  error: string | null;
+  onApply: (params: Params) => void;
+}) {
+  const [text, setText] = useState<string | null>(null);
+  const shown = text ?? (params ? formatParams(params) : "");
+  const parsed = parseParams(shown);
+  const changed = params !== null && parsed !== null && formatParams(parsed) !== formatParams(params);
+  const applying = switching === "params";
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (parsed && changed) onApply(parsed);
+  };
+  return (
+    <Panel
+      label="Parameters"
+      action={
+        params && <span className="font-mono text-xs tabular-nums text-muted-foreground">{`${Object.keys(params).length} set`}</span>
+      }
+    >
+      <form onSubmit={submit} className="flex flex-col gap-3">
+        <textarea
+          aria-label="Parameters"
+          value={shown}
+          onChange={(event) => setText(event.target.value)}
+          placeholder={"SIM_WIND_SPD 7\nSIM_WIND_DIR 270\nSIM_BATT_VOLTAGE 14.8"}
+          rows={5}
+          spellCheck={false}
+          aria-invalid={parsed === null}
+          className="min-h-24 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 font-mono text-[13px] tabular-nums outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive"
+        />
+        <Button type="submit" size="sm" className="h-9 self-end" disabled={!changed || switching !== null}>
+          {applying ? <LoaderCircle className="size-3.5 motion-safe:animate-spin" /> : <SlidersHorizontal className="size-3.5" />}
+          {applying ? "Applying…" : "Apply"}
+        </Button>
+      </form>
+      <p className="mt-3 text-xs text-muted-foreground">
+        One <span className="font-mono">NAME value</span> per line, set over the airframe's defaults every time the simulator starts.
+        Applying restarts the simulator for everyone connected.
         {error && <span className="ml-1 text-destructive">{error}</span>}
       </p>
     </Panel>
