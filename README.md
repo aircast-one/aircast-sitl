@@ -110,6 +110,7 @@ atmosphere, physical sun, filmic tone mapping) and pushes 1280×720 frames throu
 Games Launcher and Xcode's Metal toolchain (`xcodebuild -downloadComponent MetalToolchain`; without
 it Unreal stops at startup behind an alert). `just unreal-build` installs the pinned Cesium for
 Unreal into the engine and compiles `unreal/`. The first launch compiles shaders for a few minutes.
+Both looks aim by the simulated gimbal, so gimbal controls and Follow's tracking move the picture.
 
 In the Aircast app, add a TCP link to `sitl.aircast.one:5760` (in the browser at fly.aircast.one, a
 Network link to `wss://sitl.aircast.one/ws/mavlink`) and a camera with the printed RTSP address.
@@ -117,18 +118,25 @@ Network link to `wss://sitl.aircast.one/ws/mavlink`) and a camera with the print
 
 ## Car to chase
 
-A car drives the first 2 km of road ahead of home and back, at 8 m/s, forever. The road comes from
-the public [OSRM](https://project-osrm.org/) router, from home toward the home heading, so the car
-moves with the Location panel. It is MAVLink system 2 and sends only `GLOBAL_POSITION_INT`, so the
-Aircast app shows no second vehicle. The onboard camera draws it on the road.
+A car drives the first 2 km of road ahead of home and back, forever. The road comes from the public
+[OSRM](https://project-osrm.org/) router, from home toward the home heading, so the car moves with
+the Location panel. It brakes into each end of the road at 2 m/s² and pulls away again the same way.
+It is MAVLink system 2 and sends only `GLOBAL_POSITION_INT`, so the Aircast app shows no second
+vehicle. The onboard camera (browser and Unreal) and the 3D FPV view draw it on the road.
 
-Switch the copter to Follow and it chases the car 20 m behind and 15 m above, nose and gimbal on it
-([`src/follow.parm`](src/follow.parm)), at up to 15 m/s. Measured from a 320 m gap: caught up in
-about 60 s, then held its spot within 1 m, and back on it 25 s after the car turned around. Loiter
-tops out at 10 m/s, so a hand-flown chase keeps up too.
+The Car panel on the dashboard sets its speed, 0 to 20 m/s (8 by default; 0 parks it), live and
+without a restart, and shows how far it is from the drone. `POST /api/car` with `{"speed": 12}` does
+the same from a script. The speed stays until the container restarts.
+
+Switch the copter to Follow and it chases the car 20 m behind and 15 m above, nose and gimbal on it,
+at up to 25 m/s ([`src/follow.parm`](src/follow.parm)), from anywhere within 2.5 km. Measured with
+the car at 20 m/s from a standstill: on its spot in about 40 s, then within 2 m, and no more than
+29 m off it through the turn at the end of the road. Loiter tops out at 10 m/s, so a hand-flown
+chase needs the car at 10 m/s or less, or Acro.
 
 `web/public/models/car.glb` is the Cesium Milk Truck, © 2017 Cesium, under
-[CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+[CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/). Unreal draws a box van from the engine's
+basic shapes.
 
 ## Ports
 

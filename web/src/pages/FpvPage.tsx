@@ -17,6 +17,7 @@ import { useTelemetry } from "@/hooks/useTelemetry.ts";
 import { useCesiumViewer, type MapLayer } from "@/hooks/useCesiumViewer.ts";
 import { Hud } from "@/components/Hud.tsx";
 import { Button } from "@/components/ui/button.tsx";
+import { addCar } from "@/lib/car.ts";
 import { HOME_POSE, homeAltitude, smoothPose, terrainFollowing, tilesHeight, type Pose } from "@/lib/pose.ts";
 
 const MODEL_URL = "/models/drone.glb";
@@ -72,7 +73,8 @@ export function FpvPage() {
     const controller = viewer.scene.screenSpaceCameraController;
     controller.minimumZoomDistance = NEAREST_M;
     controller.maximumZoomDistance = FARTHEST_M;
-    const altitude = photorealistic ? homeAltitude(tilesHeight(viewer, [entity])) : terrainFollowing(viewer);
+    const car = addCar(viewer);
+    const altitude = photorealistic ? homeAltitude(tilesHeight(viewer, [entity, car.entity])) : terrainFollowing(viewer);
 
     let behind = 0;
     let aimedAt = initialPos;
@@ -89,6 +91,7 @@ export function FpvPage() {
 
       const s = smoothPose(poseRef.current, telemetryRef.current, altitude);
       poseRef.current = s;
+      car.drive(telemetryRef.current.car);
 
       const position = Cartesian3.fromDegrees(s.lng, s.lat, s.alt);
 
@@ -129,6 +132,7 @@ export function FpvPage() {
           Cartesian3.fromDegrees(last.lng, last.lat, last.alt),
         ));
         viewer.entities.remove(entity);
+        viewer.entities.remove(car.entity);
       }
       entityRef.current = null;
     };

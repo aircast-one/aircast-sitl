@@ -7,12 +7,13 @@ from itertools import accumulate
 
 from pymavlink import mavutil
 
-from serve import current_home
+from serve import current_car_speed, current_home
 
 SYSID = 2
-SPEED_MS = 8
 ROUTE_M = 2000
 RATE_HZ = 10
+ACCEL_MS2 = 2
+CRAWL_MS = 1
 EARTH_RADIUS_M = 6371000
 ROUTER = "tcp:127.0.0.1:5760"
 ROUTE_URL = "https://router.project-osrm.org/route/v1/driving/{0[1]},{0[0]};{1[1]},{1[0]}?overview=full&geometries=geojson"
@@ -51,11 +52,22 @@ def along(route, s):
     return (a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f), math.atan2(east, north)
 
 
-def drive(route, t):
+def leg_position(route, distance):
     length = route[1][-1]
-    s = (SPEED_MS * t) % (2 * length)
-    point, heading = along(route, min(s, 2 * length - s))
-    return point, heading if s <= length else heading + math.pi
+    s = distance % (2 * length)
+    return min(s, 2 * length - s), s > length
+
+
+def drive(route, distance):
+    at, returning = leg_position(route, distance)
+    point, heading = along(route, at)
+    return point, heading + math.pi if returning else heading
+
+
+def pace(route, distance, speed):
+    at, _ = leg_position(route, distance)
+    to_turn = min(at, route[1][-1] - at)
+    return min(speed, CRAWL_MS + math.sqrt(2 * ACCEL_MS2 * to_turn))
 
 
 def fetch_route(home):
@@ -88,19 +100,23 @@ def main():
     home = current_home()
     route = find_route(home)
     conn = connect()
-    print(f"Car (sysid {SYSID}) driving {route[1][-1]:.0f} m of road and back at {SPEED_MS} m/s")
-    started = time.monotonic()
+    print(f"Car (sysid {SYSID}) driving {route[1][-1]:.0f} m of road and back")
+    started = last = time.monotonic()
+    distance = 0.0
     while True:
-        t = time.monotonic() - started
-        (lat, lng), heading = drive(route, t)
+        now = time.monotonic()
+        speed = pace(route, distance, current_car_speed())
+        distance += speed * (now - last)
+        last = now
+        (lat, lng), heading = drive(route, distance)
         conn.mav.global_position_int_send(
-            int(t * 1000),
+            int((now - started) * 1000),
             int(lat * 1e7),
             int(lng * 1e7),
             int(home["alt"] * 1000),
             0,
-            int(SPEED_MS * math.cos(heading) * 100),
-            int(SPEED_MS * math.sin(heading) * 100),
+            int(speed * math.cos(heading) * 100),
+            int(speed * math.sin(heading) * 100),
             0,
             int(math.degrees(heading) % 360 * 100),
         )

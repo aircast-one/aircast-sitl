@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { Cartographic, EllipsoidGeodesic } from "cesium";
 import { ArrowUpRight, Check, Copy, LoaderCircle, MapPin, Plus, RotateCcw, SlidersHorizontal } from "lucide-react";
 import { useTelemetry, type Telemetry } from "@/hooks/useTelemetry.ts";
 import { AirframeIcon, type AirframeId } from "@/components/Airframe.tsx";
@@ -23,6 +24,7 @@ type Restart = AirframeId | "reset" | "home" | "params";
 type RestartError = { target: Restart; text: string };
 type Home = LatLng & { alt: number };
 type Params = Record<string, number>;
+type CarSpeed = { speed: number; max: number };
 
 const COORDINATES = /^\s*(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)\s*$/;
 
@@ -122,6 +124,8 @@ export function DashboardPage() {
   const [applied, setApplied] = useState<number | null>(null);
   const [switching, setSwitching] = useState<Restart | null>(null);
   const [error, setError] = useState<RestartError | null>(null);
+  const [car, setCar] = useState<CarSpeed | null>(null);
+  const [carError, setCarError] = useState<string | null>(null);
   const host = window.location.hostname || "localhost";
 
   useEffect(() => {
@@ -136,6 +140,10 @@ export function DashboardPage() {
     fetch("/api/params")
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => data?.params && setParams(data.params))
+      .catch(() => undefined);
+    fetch("/api/car")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => data && setCar(data))
       .catch(() => undefined);
   }, []);
 
@@ -195,6 +203,18 @@ export function DashboardPage() {
     }
   };
 
+  const handleCarSpeed = async (speed: number) => {
+    setCar((prev) => prev && { ...prev, speed });
+    setCarError(null);
+    const res = await fetch("/api/car", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ speed }),
+    }).catch(() => null);
+    const data = await res?.json().catch(() => ({}));
+    if (!res?.ok) setCarError(data?.error ?? "Network error");
+  };
+
   const errorFor = (targets: readonly Restart[]) => (error && targets.includes(error.target) ? error.text : null);
 
   return (
@@ -233,6 +253,7 @@ export function DashboardPage() {
         </div>
         <aside className="flex min-w-0 flex-col gap-4">
           <ConnectPanel host={host} />
+          <CarPanel car={car} telemetry={telemetry} live={link === "live"} error={carError} onSpeed={handleCarSpeed} />
           <ViewsPanel />
         </aside>
       </main>
@@ -610,6 +631,60 @@ function CopyRow({ label, hint, value }: { label: string; hint: string; value: s
         {copied ? <Check className="size-4 text-success" /> : <Copy className="size-4" />}
       </Button>
     </li>
+  );
+}
+
+function metersBetween(a: LatLng, b: LatLng) {
+  return new EllipsoidGeodesic(Cartographic.fromDegrees(a.lng, a.lat), Cartographic.fromDegrees(b.lng, b.lat)).surfaceDistance;
+}
+
+function CarPanel({
+  car,
+  telemetry,
+  live,
+  error,
+  onSpeed,
+}: {
+  car: CarSpeed | null;
+  telemetry: Telemetry;
+  live: boolean;
+  error: string | null;
+  onSpeed: (speed: number) => void;
+}) {
+  const distance = live && telemetry.car ? metersBetween(telemetry, telemetry.car) : null;
+  return (
+    <Panel
+      label="Car"
+      action={
+        <span className="font-mono text-xs tabular-nums text-muted-foreground">
+          {distance === null ? "—" : `${distance.toFixed(0)} m away`}
+        </span>
+      }
+    >
+      <dl>
+        <Readout
+          label="Speed"
+          value={car ? car.speed.toFixed(0) : "—"}
+          unit={car ? `m/s · ${(car.speed * 3.6).toFixed(0)} km/h` : "m/s"}
+          hero
+        />
+      </dl>
+      <input
+        type="range"
+        aria-label="Car speed"
+        min={0}
+        max={car?.max ?? 0}
+        step={1}
+        value={car?.speed ?? 0}
+        disabled={!car}
+        onChange={(event) => onSpeed(Number(event.target.value))}
+        className="mt-4 w-full accent-primary"
+      />
+      <p className="mt-3 text-xs text-muted-foreground">
+        Drives the road ahead of home and back. Switch the copter to Follow to chase it 20 m behind.
+        {error && <span className="ml-1 text-destructive">{error}</span>}
+      </p>
+    </Panel>
   );
 }
 

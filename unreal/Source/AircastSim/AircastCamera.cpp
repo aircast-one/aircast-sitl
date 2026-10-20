@@ -1,4 +1,5 @@
 #include "AircastCamera.h"
+#include "AircastCar.h"
 
 #include <csignal>
 #include <cstdio>
@@ -29,6 +30,7 @@ namespace
 	constexpr int64 GooglePhotorealisticAsset = 2275207;
 	const FVector HomePose(149.1652373, -35.363262, 590.0);
 	constexpr double GimbalTiltDegrees = -15.0;
+	constexpr double SnapDegrees = 0.01;
 	constexpr double GroundClearance = 0.5;
 	constexpr double LerpPerFrameAt60 = 0.1;
 	constexpr double ResampleSeconds = 1.0;
@@ -67,6 +69,7 @@ AAircastCamera::AAircastCamera()
 	Exposure.bOverride_DepthOfFieldFstop = true;
 	Exposure.DepthOfFieldFstop = 16.0f;
 	Pose = HomePose;
+	Pitch = FMath::DegreesToRadians(GimbalTiltDegrees);
 }
 
 void AAircastCamera::BeginPlay()
@@ -104,6 +107,8 @@ void AAircastCamera::BeginPlay()
 	Sky->UseDaylightSavingTime = false;
 	Sky->SolarTime = 12.0;
 	Sky->UpdateSun();
+
+	Car = GetWorld()->SpawnActor<AAircastCar>();
 
 	GetWorld()->GetFirstPlayerController()->SetViewTarget(this);
 	Connect();
@@ -174,6 +179,16 @@ void AAircastCamera::Receive(const FString& Message)
 			Latest.Home = Latest.LongitudeLatitude;
 		}
 	}
+	else if (Type == TEXT("GIMBAL"))
+	{
+		Latest.Gimbal = FGimbal{Json->GetNumberField(TEXT("pitch")), Json->GetNumberField(TEXT("yaw")), Json->GetBoolField(TEXT("earth_yaw"))};
+	}
+	else if (Type == TEXT("CAR"))
+	{
+		Latest.Car = FCarFix{
+			FVector2D(Json->GetNumberField(TEXT("lng")), Json->GetNumberField(TEXT("lat"))),
+			FMath::DegreesToRadians(Json->GetNumberField(TEXT("hdg")))};
+	}
 }
 
 void AAircastCamera::Sample(FGroundSample& Ground, const FVector2D& LongitudeLatitude)
@@ -220,10 +235,35 @@ void AAircastCamera::Tick(float DeltaSeconds)
 		: Pose.Z;
 
 	Pose = FVector(LongitudeLatitude.X, LongitudeLatitude.Y, Height);
-	Heading += FMath::FindDeltaAngleRadians(Heading, Latest.Yaw) * Alpha;
+	const TOptional<FGimbal>& Gimbal = Latest.Gimbal;
+	const double AimHeading = !Gimbal ? Latest.Yaw : Gimbal->bEarthYaw ? Gimbal->Yaw : Latest.Yaw + Gimbal->Yaw;
+	const double AimPitch = Gimbal ? Gimbal->Pitch : FMath::DegreesToRadians(GimbalTiltDegrees);
+	Heading += FMath::FindDeltaAngleRadians(Heading, AimHeading) * Alpha;
+	Pitch = FMath::Lerp(Pitch, AimPitch, Alpha);
 	GlobeAnchor->MoveToLongitudeLatitudeHeight(Pose);
-	GlobeAnchor->SetEastSouthUpRotation(FRotator(GimbalTiltDegrees, FMath::RadiansToDegrees(Heading) - 90.0, 0.0).Quaternion());
+	GlobeAnchor->SetEastSouthUpRotation(
+		FRotator(FMath::RadiansToDegrees(Pitch), FMath::RadiansToDegrees(Heading) - 90.0, 0.0).Quaternion());
+	DriveCar(Alpha);
 	Stream();
+}
+
+void AAircastCamera::DriveCar(double Alpha)
+{
+	if (!Latest.Car)
+	{
+		return;
+	}
+	const FVector2D Was(CarPose.X, CarPose.Y);
+	const bool bJumped = FVector2D::Distance(Was, Latest.Car->LongitudeLatitude) > SnapDegrees;
+	const FVector2D At = bJumped ? Latest.Car->LongitudeLatitude : FMath::Lerp(Was, Latest.Car->LongitudeLatitude, Alpha);
+	CarHeading = bJumped ? Latest.Car->Heading : CarHeading + FMath::FindDeltaAngleRadians(CarHeading, Latest.Car->Heading) * Alpha;
+	Sample(CarGround, At);
+	if (!CarGround.Height)
+	{
+		return;
+	}
+	CarPose = FVector(At.X, At.Y, bJumped || CarPose.Z == 0.0 ? *CarGround.Height : FMath::Lerp(CarPose.Z, *CarGround.Height, Alpha));
+	Car->Drive(CarPose, CarHeading);
 }
 
 void AAircastCamera::Stream()

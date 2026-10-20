@@ -14,6 +14,9 @@ WEB_DIR = os.environ.get("WEB_DIR", "/var/www/html")
 VEHICLE_FILE = os.environ.get("VEHICLE_FILE", "/var/lib/aircast/vehicle")
 HOME_FILE = os.environ.get("HOME_FILE", "/var/lib/aircast/home")
 PARAMS_FILE = os.environ.get("PARAMS_FILE", "/var/lib/aircast/params.parm")
+CAR_FILE = os.environ.get("CAR_FILE", "/var/lib/aircast/car")
+CAR_SPEED_MS = 8.0
+CAR_MAX_SPEED_MS = 20
 PARAM_NAME = re.compile(r"[A-Z][A-Z0-9_]{0,15}")
 FLOAT32_MAX = 3.4028235e38
 VEHICLES = ("copter", "plane", "quadplane")
@@ -39,6 +42,14 @@ def current_vehicle():
     except OSError:
         return VEHICLES[0]
     return vehicle if vehicle in VEHICLES else VEHICLES[0]
+
+
+def current_car_speed():
+    try:
+        with open(CAR_FILE) as f:
+            return float(f.read())
+    except (OSError, ValueError):
+        return CAR_SPEED_MS
 
 
 def current_home():
@@ -180,6 +191,9 @@ class SITLHandler(SimpleHTTPRequestHandler):
         if self.path == "/api/params":
             self._send_json(200, {"params": current_params()})
             return
+        if self.path == "/api/car":
+            self._send_json(200, {"speed": current_car_speed(), "max": CAR_MAX_SPEED_MS})
+            return
         path = self.translate_path(self.path)
         if not os.path.exists(path) or (os.path.isdir(path) and not os.path.exists(os.path.join(path, "index.html"))):
             self.path = "/index.html"
@@ -198,7 +212,20 @@ class SITLHandler(SimpleHTTPRequestHandler):
         if self.path == "/api/params":
             self._handle_params()
             return
+        if self.path == "/api/car":
+            self._handle_car()
+            return
         self._send_json(404, {"error": "not found"})
+
+    def _handle_car(self):
+        speed = self._read_json().get("speed")
+        if type(speed) not in (int, float) or not 0 <= speed <= CAR_MAX_SPEED_MS:
+            self._send_json(400, {"error": f"speed must be from 0 to {CAR_MAX_SPEED_MS} m/s"})
+            return
+        os.makedirs(os.path.dirname(CAR_FILE), exist_ok=True)
+        with open(CAR_FILE, "w") as f:
+            f.write(str(speed))
+        self._send_json(200, {"speed": speed, "max": CAR_MAX_SPEED_MS})
 
     def _handle_reset(self):
         if restart_sitl():

@@ -202,6 +202,35 @@ test.describe("Dashboard Page", () => {
     });
   });
 
+  test.describe("Car", () => {
+    const panelOf = (page: Page) => page.locator("section", { has: page.getByRole("heading", { name: "Car", exact: true }) });
+
+    test.afterEach(async ({ request }) => {
+      await request.post("/api/car", { data: { speed: 8 } });
+    });
+
+    test("the slider sets how fast the car drives", async ({ page, request }) => {
+      await page.goto("/");
+      const panel = panelOf(page);
+      await panel.getByRole("slider", { name: "Car speed" }).fill("12");
+      await expect(panel.getByText("m/s · 43 km/h")).toBeVisible();
+      await expect.poll(async () => (await (await request.get("/api/car")).json()).speed).toBe(12);
+    });
+
+    test("the car drives the road, its distance from the drone counting live", async ({ page }) => {
+      await page.goto("/");
+      const away = panelOf(page).getByText(/^\d+ m away$/);
+      await expect(away).toBeVisible({ timeout: 15_000 });
+      const first = await away.textContent();
+      await expect(away).not.toHaveText(first ?? "", { timeout: 10_000 });
+    });
+
+    test("the car API refuses a speed off the slider", async ({ request }) => {
+      expect((await request.post("/api/car", { data: { speed: 21 } })).status()).toBe(400);
+      expect((await request.post("/api/car", { data: { speed: -1 } })).status()).toBe(400);
+    });
+  });
+
   test("lists the ports the simulator exposes", async ({ page }) => {
     await page.goto("/");
     for (const port of ["TCP 5760", "UDP 14550", "FlightGear 9005"]) {

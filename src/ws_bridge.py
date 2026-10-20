@@ -143,7 +143,7 @@ async def mavlink_reader(mavlink_host, mavlink_port):
         try:
             msg = mav.recv_match(type=list(WANTED_TYPES), blocking=False)
             if msg:
-                if msg.get_type() != 'HEARTBEAT':
+                if msg.get_type() != 'HEARTBEAT' and msg.get_srcSystem() == mav.target_system:
                     streamed_at = time.monotonic()
                 elif time.monotonic() - streamed_at > STREAM_SILENCE_S:
                     print('Only heartbeats for a while, the SITL restarted: requesting data streams again')
