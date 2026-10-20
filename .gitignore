@@ -5,3 +5,4 @@ mav.tlog.raw
 .idea
 web/test-results/
 dist/
+__pycache__/
