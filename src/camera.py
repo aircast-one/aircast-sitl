@@ -46,11 +46,19 @@ def picks(box, command, p):
     return p[0] < box[2] and box[0] < p[2] and p[1] < box[3] and box[1] < p[3]
 
 
+def autopilot_heartbeat(msg):
+    return msg.autopilot != MAV.MAV_AUTOPILOT_INVALID and msg.type != MAV.MAV_TYPE_GCS
+
+
 def connect(host, port):
     while True:
         try:
             conn = mavutil.mavlink_connection(f'tcp:{host}:{port}', autoreconnect=True)
-            conn.wait_heartbeat(timeout=10)
+            beat = next(
+                msg for msg in iter(lambda: conn.recv_match(type='HEARTBEAT', blocking=True, timeout=10), None)
+                if autopilot_heartbeat(msg)
+            )
+            conn.target_system = beat.get_srcSystem()
             conn.mav.srcSystem = conn.target_system
             conn.mav.srcComponent = COMPONENT
             print(f'Simulated camera is component {COMPONENT} of system {conn.target_system}, tracking the car')
