@@ -10,6 +10,7 @@ AIRCAST_PARAMS=/usr/local/share/aircast
 shutdown() {
     echo "Shutting down Aircast SITL..."
     kill -TERM "$ws_bridge_pid" 2>/dev/null || true
+    kill -TERM "$car_pid" 2>/dev/null || true
     kill -TERM "$web_pid" 2>/dev/null || true
     kill -TERM "$router_pid" 2>/dev/null || true
     kill -TERM "$sitl_pid" 2>/dev/null || true
@@ -61,7 +62,7 @@ while true; do
         *)
             binary=arducopter
             model=quad:$AIRCAST_PARAMS/racer.json
-            defaults="$DEFAULT_PARAMS/copter.parm,$AIRCAST_PARAMS/gimbal.parm,$AIRCAST_PARAMS/airframe.parm,$AIRCAST_PARAMS/pilot.parm"
+            defaults="$DEFAULT_PARAMS/copter.parm,$AIRCAST_PARAMS/gimbal.parm,$AIRCAST_PARAMS/airframe.parm,$AIRCAST_PARAMS/pilot.parm,$AIRCAST_PARAMS/follow.parm"
             ;;
     esac
     if [ -s "$PARAMS_FILE" ]; then
@@ -74,6 +75,9 @@ while true; do
     sitl_pid=$!
     echo "SITL started with PID $sitl_pid"
 
+    MAVLINK20=1 PYTHONUNBUFFERED=1 python3 /opt/aircast/car.py &
+    car_pid=$!
+
     sleep 2
     if [ -z "$router_pid" ] || ! kill -0 "$router_pid" 2>/dev/null; then
         mavlink-routerd &
@@ -83,6 +87,7 @@ while true; do
 
     wait $sitl_pid
     exit_code=$?
+    kill -TERM "$car_pid" 2>/dev/null || true
 
     if [ "$exit_code" -eq 143 ] || [ "$exit_code" -eq 130 ]; then
         echo "SITL received termination signal, shutting down..."

@@ -60,6 +60,7 @@ export function useCesiumViewer(
       viewer.scene.globe.show = false;
       Cesium3DTileset.fromIonAssetId(GOOGLE_PHOTOREALISTIC_ASSET, {
         maximumScreenSpaceError: PHOTOREALISTIC_SCREEN_SPACE_ERROR,
+        enableCollision: true,
       })
         .then((tileset) => !viewer.isDestroyed() && viewer.scene.primitives.add(tileset))
         .catch((error) => console.error("Photorealistic 3D tiles failed to load", error));

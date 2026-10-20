@@ -115,6 +115,21 @@ In the Aircast app, add a TCP link to `sitl.aircast.one:5760` (in the browser at
 Network link to `wss://sitl.aircast.one/ws/mavlink`) and a camera with the printed RTSP address.
 `just camera <host>` follows another SITL. Needs Docker, uv, gh and Google Chrome.
 
+## Car to chase
+
+A car drives the first 2 km of road ahead of home and back, at 8 m/s, forever. The road comes from
+the public [OSRM](https://project-osrm.org/) router, from home toward the home heading, so the car
+moves with the Location panel. It is MAVLink system 2 and sends only `GLOBAL_POSITION_INT`, so the
+Aircast app shows no second vehicle. The onboard camera draws it on the road.
+
+Switch the copter to Follow and it chases the car 20 m behind and 15 m above, nose and gimbal on it
+([`src/follow.parm`](src/follow.parm)), at up to 15 m/s. Measured from a 320 m gap: caught up in
+about 60 s, then held its spot within 1 m, and back on it 25 s after the car turned around. Loiter
+tops out at 10 m/s, so a hand-flown chase keeps up too.
+
+`web/public/models/car.glb` is the Cesium Milk Truck, © 2017 Cesium, under
+[CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
 ## Ports
 
 | Service | TCP Ports | UDP Ports |

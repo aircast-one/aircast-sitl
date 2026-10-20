@@ -119,6 +119,8 @@ COPY src/pilot.parm /usr/local/share/aircast/pilot.parm
 COPY src/airframe.parm /usr/local/share/aircast/airframe.parm
 COPY src/racer.json /usr/local/share/aircast/racer.json
 COPY src/serve.py /opt/aircast/serve.py
+COPY src/car.py /opt/aircast/car.py
+COPY src/follow.parm /usr/local/share/aircast/follow.parm
 
 RUN mkdir -p /etc/mavlink-router && echo '[General]\n\
 TcpServerPort=5760\n\

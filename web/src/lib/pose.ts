@@ -1,5 +1,5 @@
 import { Cartographic, Math as CesiumMath, sampleTerrainMostDetailed, type TerrainProvider, type Viewer } from "cesium";
-import type { Telemetry } from "@/hooks/useTelemetry.ts";
+import type { Car, Telemetry } from "@/hooks/useTelemetry.ts";
 
 export interface Pose {
   lat: number;
@@ -110,4 +110,15 @@ export function smoothPose(prev: Pose, t: Telemetry, altitude: Altitude): Pose {
     aimHeading: prev.aimHeading + wrapAngle(aim.heading - prev.aimHeading) * LERP,
     aimPitch: lerp(prev.aimPitch, aim.pitch),
   };
+}
+
+export function smoothCar(prev: Car | null, car: Car): Car {
+  const jumped = !prev || Math.abs(car.lat - prev.lat) + Math.abs(car.lng - prev.lng) > SNAP_DEGREES;
+  return jumped
+    ? car
+    : {
+        lat: lerp(prev.lat, car.lat),
+        lng: lerp(prev.lng, car.lng),
+        heading: prev.heading + wrapAngle(car.heading - prev.heading) * LERP,
+      };
 }

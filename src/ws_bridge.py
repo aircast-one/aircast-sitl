@@ -14,10 +14,17 @@ STREAM_SILENCE_S = 3
 MAVLINK_PATH = '/ws/mavlink'
 
 
-def msg_to_json(msg):
+def msg_to_json(msg, vehicle_sysid):
     msg_type = msg.get_type()
 
-    if msg_type == 'HEARTBEAT':
+    if msg_type == 'GLOBAL_POSITION_INT' and msg.get_srcSystem() != vehicle_sysid:
+        return {
+            'type': 'CAR',
+            'lat': msg.lat / 1e7,
+            'lng': msg.lon / 1e7,
+            'hdg': msg.hdg / 100.0,
+        }
+    elif msg_type == 'HEARTBEAT':
         if msg.autopilot == mavutil.mavlink.MAV_AUTOPILOT_INVALID:
             return None
         return {
@@ -142,7 +149,7 @@ async def mavlink_reader(mavlink_host, mavlink_port):
                     print('Only heartbeats for a while, the SITL restarted: requesting data streams again')
                     request_streams(mav)
                     streamed_at = time.monotonic()
-                data = msg_to_json(msg)
+                data = msg_to_json(msg, mav.target_system)
                 if data and clients:
                     payload = json.dumps(data)
                     dead = []
