@@ -139,12 +139,28 @@ resets to the ArduPilot default (CMAC, Canberra) when the container restarts.
 ## Parameters
 
 The Parameters panel on the dashboard sets ArduPilot parameters the simulator starts with, one
-`NAME value` per line: wind (`SIM_WIND_SPD`, `SIM_WIND_DIR`), battery (`SIM_BATT_VOLTAGE`), sensor
-failures (`SIM_GPS_DISABLE`), failsafes or tuning. They are laid over the airframe's own defaults, so
-they win, and the SITL restarts with them for everyone connected. They stay through every reset and
-vehicle switch, until the container restarts. A parameter the current vehicle lacks is ignored.
-`POST /api/params` with `{"params": {"SIM_WIND_SPD": 7}}` does the same from a script and replaces the
-whole set; `{"params": {}}` clears it.
+`NAME value` per line. They are laid over the airframe's own defaults, so they win, and the SITL
+restarts with them for everyone connected. They stay through every reset and vehicle switch, until
+the container restarts.
+
+Presets fill in the common setups, and pressing one again takes it out:
+
+| Preset | Sets |
+|---|---|
+| Gripper | A servo gripper on output 12 that closes 2 s after each release, for several drops in a row |
+| 4 bays on 9–12 | Outputs 9–12 free for a servo per bay (`DO_SET_SERVO`), with the gimbal moved to 13–15 |
+| Wind | 7 m/s from the west |
+| Low battery | The battery under its low-voltage limit, so ArduPilot refuses to arm |
+
+Each name is checked against the running vehicle first. A name it doesn't know is refused, with
+the closest match it does know, and nothing restarts. A parameter that only another vehicle has is
+ignored after a vehicle switch.
+
+`POST /api/params` with `{"params": {"SIM_WIND_SPD": 7}}` does the same from a script. It replaces
+the whole set (`{"params": {}}` clears it) and answers once the restarted autopilot answers MAVLink,
+so a script can connect right away. A refused name comes back as a 400 with
+`{"unknown": {"GRIP_ENABLED": "GRIP_ENABLE"}}`. The vehicle, location and reset endpoints wait for the
+autopilot the same way.
 
 ## Stick feel
 

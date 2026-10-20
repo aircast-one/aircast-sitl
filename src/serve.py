@@ -4,7 +4,11 @@ import re
 import subprocess
 import time
 import urllib.request
+from contextlib import closing
+from difflib import get_close_matches
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+
+from pymavlink import mavutil
 
 WEB_DIR = os.environ.get("WEB_DIR", "/var/www/html")
 VEHICLE_FILE = os.environ.get("VEHICLE_FILE", "/var/lib/aircast/vehicle")
@@ -18,6 +22,14 @@ ELEVATION_URL = "https://api.open-meteo.com/v1/elevation?latitude={lat}&longitud
 ELEVATION_TIMEOUT_S = 5
 SITL_PROCESS = "ardu(copter|plane)"
 RESTART_TIMEOUT_S = 15
+MAVLINK_URL = os.environ.get("MAVLINK_URL", "tcp:127.0.0.1:5760")
+CHECK_TIMEOUT_S = 5
+READ_TIMEOUT_S = 2
+LIST_TIMEOUT_S = 15
+READY_TIMEOUT_S = 30
+PARAM_RETRY_S = 0.5
+PARAM_LIST_QUIET_S = 1
+READY_PARAM = "FORMAT_VERSION"
 
 
 def current_vehicle():
@@ -54,6 +66,77 @@ def valid_params(params):
     )
 
 
+def autopilot_target(conn, deadline):
+    while time.monotonic() < deadline:
+        msg = conn.recv_match(type="HEARTBEAT", blocking=True, timeout=max(0, deadline - time.monotonic()))
+        if msg and msg.autopilot != mavutil.mavlink.MAV_AUTOPILOT_INVALID:
+            return msg.get_srcSystem(), msg.get_srcComponent()
+    return None
+
+
+def open_autopilot(deadline):
+    while time.monotonic() < deadline:
+        try:
+            conn = mavutil.mavlink_connection(MAVLINK_URL, retries=0)
+        except OSError:
+            time.sleep(PARAM_RETRY_S)
+            continue
+        target = autopilot_target(conn, deadline)
+        if target:
+            return conn, target
+        conn.close()
+    return None, None
+
+
+def read_params(conn, target, names, deadline):
+    found = {}
+    while names - found.keys() and time.monotonic() < deadline:
+        for name in names - found.keys():
+            conn.mav.param_request_read_send(*target, name.encode(), -1)
+        retry_at = min(deadline, time.monotonic() + PARAM_RETRY_S)
+        while time.monotonic() < retry_at:
+            msg = conn.recv_match(type="PARAM_VALUE", blocking=True, timeout=max(0, retry_at - time.monotonic()))
+            if msg and msg.get_srcSystem() == target[0] and msg.param_id in names:
+                found[msg.param_id] = msg.param_value
+    return found
+
+
+def listed_params(conn, target, deadline):
+    conn.mav.param_request_list_send(*target)
+    names = set()
+    while time.monotonic() < deadline:
+        msg = conn.recv_match(type="PARAM_VALUE", blocking=True, timeout=PARAM_LIST_QUIET_S)
+        if not msg:
+            break
+        names.add(msg.param_id)
+    return names
+
+
+def unknown_params(names):
+    deadline = time.monotonic() + CHECK_TIMEOUT_S
+    conn, target = open_autopilot(deadline)
+    if not conn:
+        return {}
+    with closing(conn):
+        unknown = sorted(names - read_params(conn, target, names, time.monotonic() + READ_TIMEOUT_S).keys())
+        listed = listed_params(conn, target, time.monotonic() + LIST_TIMEOUT_S) if unknown else set()
+    return {name: next(iter(get_close_matches(name, listed, n=1)), None) for name in unknown}
+
+
+def unknown_message(unknown):
+    names = ", ".join(f"{name} (did you mean {match}?)" if match else name for name, match in unknown.items())
+    vehicle = current_vehicle()
+    return f"{names} is not a {vehicle} parameter" if len(unknown) == 1 else f"{names} are not {vehicle} parameters"
+
+
+def autopilot_answers(deadline):
+    conn, target = open_autopilot(deadline)
+    if not conn:
+        return False
+    with closing(conn):
+        return bool(read_params(conn, target, {READY_PARAM}, deadline))
+
+
 def ground_elevation(lat, lng):
     with urllib.request.urlopen(ELEVATION_URL.format(lat=lat, lng=lng), timeout=ELEVATION_TIMEOUT_S) as res:
         return float(json.load(res)["elevation"][0])
@@ -75,7 +158,7 @@ def restart_sitl():
     deadline = time.monotonic() + RESTART_TIMEOUT_S
     while time.monotonic() < deadline:
         if sitl_pids() - before:
-            return True
+            return autopilot_answers(time.monotonic() + READY_TIMEOUT_S)
         time.sleep(0.2)
     return False
 
@@ -155,6 +238,10 @@ class SITLHandler(SimpleHTTPRequestHandler):
         params = self._read_json().get("params")
         if not valid_params(params):
             self._send_json(400, {"error": "params must map ArduPilot parameter names (A-Z, 0-9 and _, up to 16) to numbers"})
+            return
+        unknown = unknown_params(set(params)) if params else {}
+        if unknown:
+            self._send_json(400, {"error": unknown_message(unknown), "unknown": unknown})
             return
         os.makedirs(os.path.dirname(PARAMS_FILE), exist_ok=True)
         with open(PARAMS_FILE, "w") as f:

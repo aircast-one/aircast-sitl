@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
 import { readParam } from "./param.ts";
 
 test.describe("Dashboard Page", () => {
@@ -106,31 +106,100 @@ test.describe("Dashboard Page", () => {
     expect(res.status()).toBe(400);
   });
 
-  test("parameters set on the dashboard reach the autopilot when the SITL restarts", async ({ page, request }) => {
-    test.setTimeout(120_000);
-    await request.post("/api/params", { data: { params: {} } });
-    await page.goto("/");
-    const panel = page.locator("section", { has: page.getByRole("heading", { name: "Parameters", exact: true }) });
-    const editor = panel.getByRole("textbox", { name: "Parameters" });
-    const apply = panel.getByRole("button", { name: "Apply" });
+  test.describe("Parameters", () => {
+    const clear = async (request: APIRequestContext) => {
+      const { params } = await (await request.get("/api/params")).json();
+      if (Object.keys(params).length > 0) await request.post("/api/params", { data: { params: {} } });
+    };
+    const panelOf = (page: Page) => page.locator("section", { has: page.getByRole("heading", { name: "Parameters", exact: true }) });
 
-    await expect(panel.getByText("0 set")).toBeVisible();
-    await expect(apply).toBeDisabled();
-    await editor.fill("SIM_WIND_SPD 7\n# from the west\nsim_wind_dir, 270");
-    await apply.click();
-    await expect(panel.getByText("2 set")).toBeVisible({ timeout: 20_000 });
-    expect(await (await request.get("/api/params")).json()).toEqual({ params: { SIM_WIND_SPD: 7, SIM_WIND_DIR: 270 } });
-    expect(await readParam("SIM_WIND_SPD")).toBe(7);
-    expect(await readParam("SIM_WIND_DIR")).toBe(270);
+    test.beforeEach(async ({ request }) => clear(request));
+    test.afterEach(async ({ request }) => clear(request));
 
-    await request.post("/api/params", { data: { params: {} } });
-    expect(await readParam("SIM_WIND_SPD")).toBe(0);
-  });
+    test("the Gripper preset gives the drone a gripper and takes it away again", async ({ page }) => {
+      test.setTimeout(120_000);
+      await page.goto("/");
+      const panel = panelOf(page);
+      const gripper = panel.getByRole("button", { name: "Gripper" });
+      const editor = panel.getByRole("textbox", { name: "Parameters" });
+      const apply = panel.getByRole("button", { name: "Apply" });
 
-  test("the parameters API rejects what ArduPilot would not load", async ({ request }) => {
-    const rejected = [{ SIM_WIND_SPD: "7" }, { "sim wind": 7 }, { SIM_WIND_SPD_TOO_LONG: 7 }, { SIM_WIND_SPD: true }];
-    const statuses = await Promise.all(rejected.map(async (params) => (await request.post("/api/params", { data: { params } })).status()));
-    expect(statuses).toEqual(rejected.map(() => 400));
+      await expect(panel.getByText("0 set")).toBeVisible();
+      await gripper.click();
+      await expect(gripper).toHaveAttribute("aria-pressed", "true");
+      await expect(editor).toHaveValue(/GRIP_ENABLE 1\nGRIP_TYPE 1\nSERVO12_FUNCTION 28\nGRIP_AUTOCLOSE 2$/);
+      await apply.click();
+      await expect(panel.getByText("Restarted with 4 parameters.")).toBeVisible({ timeout: 45_000 });
+      expect(await readParam("GRIP_ENABLE")).toBe(1);
+      expect(await readParam("SERVO12_FUNCTION")).toBe(28);
+
+      await gripper.click();
+      await expect(gripper).toHaveAttribute("aria-pressed", "false");
+      await expect(editor).toHaveValue("");
+      await apply.click();
+      await expect(panel.getByText("Restarted with the airframe's own defaults.")).toBeVisible({ timeout: 45_000 });
+      expect(await readParam("GRIP_ENABLE")).toBe(0);
+    });
+
+    test("every preset is a set the copter loads", async ({ page }) => {
+      test.setTimeout(120_000);
+      await page.goto("/");
+      const panel = panelOf(page);
+      const presets = panel.getByRole("group", { name: "Presets" }).getByRole("button");
+      await expect(presets).toHaveCount(4);
+      for (const preset of await presets.all()) await preset.click();
+      await panel.getByRole("button", { name: "Apply" }).click();
+      await expect(panel.getByText("Restarted with 14 parameters.")).toBeVisible({ timeout: 45_000 });
+      expect(await readParam("SERVO13_FUNCTION")).toBe(7);
+      expect(await readParam("SIM_WIND_DIR")).toBe(270);
+      expect(await readParam("SIM_BATT_VOLTAGE")).toBeCloseTo(10.4, 5);
+    });
+
+    test("typed parameters reach the autopilot, comments and lowercase allowed", async ({ page, request }) => {
+      test.setTimeout(120_000);
+      await page.goto("/");
+      const panel = panelOf(page);
+      await panel.getByRole("textbox", { name: "Parameters" }).fill("SIM_WIND_SPD 7\n# from the west\nsim_wind_dir, 270");
+      await panel.getByRole("button", { name: "Apply" }).click();
+      await expect(panel.getByText("Restarted with 2 parameters.")).toBeVisible({ timeout: 45_000 });
+      expect(await (await request.get("/api/params")).json()).toEqual({ params: { SIM_WIND_SPD: 7, SIM_WIND_DIR: 270 } });
+      expect(await readParam("SIM_WIND_SPD")).toBe(7);
+    });
+
+    test("a malformed line is named and blocks Apply", async ({ page }) => {
+      await page.goto("/");
+      const panel = panelOf(page);
+      const editor = panel.getByRole("textbox", { name: "Parameters" });
+      const apply = panel.getByRole("button", { name: "Apply" });
+
+      await editor.fill("GRIP_ENABLE 1\nGRIP_TYPE servo");
+      await expect(panel.getByRole("alert")).toHaveText("Line 2: “servo” is not a number");
+      await expect(apply).toBeDisabled();
+      await editor.fill("GRIP_AUTOCLOSE_TIME 2");
+      await expect(panel.getByRole("alert")).toHaveText("Line 1: GRIP_AUTOCLOSE_TIME is longer than 16 characters");
+      await editor.fill("GRIP_ENABLE");
+      await expect(panel.getByRole("alert")).toHaveText("Line 1: write it as NAME value");
+    });
+
+    test("a misspelled name is refused with a suggestion, without restarting", async ({ page, request }) => {
+      await page.goto("/");
+      const panel = panelOf(page);
+      await panel.getByRole("textbox", { name: "Parameters" }).fill("GRIP_ENABLED 1");
+      await panel.getByRole("button", { name: "Apply" }).click();
+      await expect(panel.getByRole("alert")).toHaveText("GRIP_ENABLED (did you mean GRIP_ENABLE?) is not a copter parameter", { timeout: 30_000 });
+      await expect(page.getByRole("status")).toHaveText("Live");
+      expect(await (await request.get("/api/params")).json()).toEqual({ params: {} });
+
+      const res = await request.post("/api/params", { data: { params: { GRIP_ENABLED: 1 } } });
+      expect(res.status()).toBe(400);
+      expect(await res.json()).toMatchObject({ unknown: { GRIP_ENABLED: "GRIP_ENABLE" } });
+    });
+
+    test("the API rejects what ArduPilot could not load", async ({ request }) => {
+      const rejected = [{ SIM_WIND_SPD: "7" }, { "sim wind": 7 }, { SIM_WIND_SPD_TOO_LONG: 7 }, { SIM_WIND_SPD: true }];
+      const statuses = await Promise.all(rejected.map(async (params) => (await request.post("/api/params", { data: { params } })).status()));
+      expect(statuses).toEqual(rejected.map(() => 400));
+    });
   });
 
   test("lists the ports the simulator exposes", async ({ page }) => {

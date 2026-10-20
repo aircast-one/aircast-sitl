@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { ArrowUpRight, Check, Copy, LoaderCircle, MapPin, RotateCcw, SlidersHorizontal } from "lucide-react";
+import { ArrowUpRight, Check, Copy, LoaderCircle, MapPin, Plus, RotateCcw, SlidersHorizontal } from "lucide-react";
 import { useTelemetry, type Telemetry } from "@/hooks/useTelemetry.ts";
 import { AirframeIcon, type AirframeId } from "@/components/Airframe.tsx";
 import { Attitude } from "@/components/Attitude.tsx";
@@ -34,22 +34,69 @@ function parseCoordinates(text: string): LatLng | null {
 
 const formatCoordinates = ({ lat, lng }: LatLng) => `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
 
-const PARAM_LINE = /^([A-Za-z]\w*)[\s,=]+(\S+)$/;
+const PARAM_NAME = /^[A-Za-z]\w*$/;
+const PARAM_NAME_LENGTH = 16;
 
-function parseParams(text: string): Params | null {
-  const entries = text
+type ParamLine = { number: number; words: readonly string[] };
+type ParsedParams = { params: Params; problems: readonly string[] };
+
+const paramWords = (line: string) => line.replace(/#.*/, "").trim().split(/[\s,=]+/).filter(Boolean);
+
+function lineProblem([name = "", value, ...rest]: readonly string[]): string | null {
+  if (value === undefined || rest.length > 0) return "write it as NAME value";
+  if (!PARAM_NAME.test(name)) return `${name} is not a parameter name`;
+  if (name.length > PARAM_NAME_LENGTH) return `${name} is longer than ${PARAM_NAME_LENGTH} characters`;
+  return Number.isFinite(Number(value)) ? null : `“${value}” is not a number`;
+}
+
+function parseParams(text: string): ParsedParams {
+  const lines: readonly ParamLine[] = text
     .split("\n")
-    .map((line) => line.replace(/#.*/, "").trim())
-    .filter(Boolean)
-    .map((line) => PARAM_LINE.exec(line))
-    .map((match) => (match && Number.isFinite(Number(match[2])) ? ([match[1].toUpperCase(), Number(match[2])] as const) : null));
-  return entries.every((entry) => entry !== null) ? Object.fromEntries(entries) : null;
+    .map((line, index) => ({ number: index + 1, words: paramWords(line) }))
+    .filter((line) => line.words.length > 0);
+  return {
+    params: Object.fromEntries(lines.map(({ words: [name = "", value] }) => [name.toUpperCase(), Number(value)])),
+    problems: lines.flatMap(({ number, words }) => {
+      const problem = lineProblem(words);
+      return problem ? [`Line ${number}: ${problem}`] : [];
+    }),
+  };
 }
 
 const formatParams = (params: Params) =>
   Object.entries(params)
     .map(([name, value]) => `${name} ${value}`)
     .join("\n");
+
+type Preset = { label: string; note: string; params: Params };
+
+const presets: readonly Preset[] = [
+  {
+    label: "Gripper",
+    note: "Gripper on output 12, closing 2 s after each release",
+    params: { GRIP_ENABLE: 1, GRIP_TYPE: 1, SERVO12_FUNCTION: 28, GRIP_AUTOCLOSE: 2 },
+  },
+  {
+    label: "4 bays on 9–12",
+    note: "Outputs 9–12 free for a servo per bay, gimbal moved to 13–15",
+    params: { SERVO9_FUNCTION: 0, SERVO10_FUNCTION: 0, SERVO11_FUNCTION: 0, SERVO13_FUNCTION: 7, SERVO14_FUNCTION: 6, SERVO15_FUNCTION: 8 },
+  },
+  { label: "Wind", note: "Wind 7 m/s from the west", params: { SIM_WIND_SPD: 7, SIM_WIND_DIR: 270 } },
+  { label: "Low battery", note: "Battery under its low-voltage limit, so arming is refused", params: { SIM_BATT_VOLTAGE: 10.4, BATT_LOW_VOLT: 10.5 } },
+];
+
+const presetActive = (preset: Preset, params: Params) =>
+  Object.entries(preset.params).every(([name, value]) => params[name] === value);
+
+function togglePreset(text: string, preset: Preset, active: boolean): string {
+  const kept = text
+    .split("\n")
+    .filter((line) => line.trim() !== `# ${preset.note}` && !((paramWords(line)[0] ?? "").toUpperCase() in preset.params))
+    .join("\n")
+    .trim();
+  const added = active ? [] : [`# ${preset.note}`, formatParams(preset.params)];
+  return [kept, ...added].filter(Boolean).join("\n");
+}
 
 function useNow(intervalMs: number) {
   const [now, setNow] = useState(() => Date.now());
@@ -72,6 +119,7 @@ export function DashboardPage() {
   const [airframe, setAirframe] = useState<AirframeId | null>(null);
   const [home, setHome] = useState<Home | null>(null);
   const [params, setParams] = useState<Params | null>(null);
+  const [applied, setApplied] = useState<number | null>(null);
   const [switching, setSwitching] = useState<Restart | null>(null);
   const [error, setError] = useState<RestartError | null>(null);
   const host = window.location.hostname || "localhost";
@@ -133,14 +181,18 @@ export function DashboardPage() {
   };
 
   const handleParams = async (next: Params) => {
-    const applied = await restart("params", () =>
+    setApplied(null);
+    const result = await restart("params", () =>
       fetch("/api/params", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ params: next }),
       }),
     );
-    if (applied) setParams(applied.params);
+    if (result) {
+      setParams(result.params);
+      setApplied(Object.keys(result.params).length);
+    }
   };
 
   const errorFor = (targets: readonly Restart[]) => (error && targets.includes(error.target) ? error.text : null);
@@ -176,7 +228,7 @@ export function DashboardPage() {
             error={errorFor(["home"])}
             onMove={handleHome}
           />
-          <ParamsPanel params={params} switching={switching} error={errorFor(["params"])} onApply={handleParams} />
+          <ParamsPanel params={params} applied={applied} switching={switching} error={errorFor(["params"])} onApply={handleParams} />
           <TelemetryPanel telemetry={telemetry} live={link === "live"} />
         </div>
         <aside className="flex min-w-0 flex-col gap-4">
@@ -362,11 +414,13 @@ function LocationPanel({
 
 function ParamsPanel({
   params,
+  applied,
   switching,
   error,
   onApply,
 }: {
   params: Params | null;
+  applied: number | null;
   switching: Restart | null;
   error: string | null;
   onApply: (params: Params) => void;
@@ -374,12 +428,14 @@ function ParamsPanel({
   const [text, setText] = useState<string | null>(null);
   const shown = text ?? (params ? formatParams(params) : "");
   const parsed = parseParams(shown);
-  const changed = params !== null && parsed !== null && formatParams(parsed) !== formatParams(params);
+  const valid = parsed.problems.length === 0;
+  const changed = params !== null && valid && formatParams(parsed.params) !== formatParams(params);
   const applying = switching === "params";
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (parsed && changed) onApply(parsed);
+    if (changed) onApply(parsed.params);
   };
+  const problems = valid ? (error ? [error] : []) : parsed.problems;
   return (
     <Panel
       label="Parameters"
@@ -387,26 +443,58 @@ function ParamsPanel({
         params && <span className="font-mono text-xs tabular-nums text-muted-foreground">{`${Object.keys(params).length} set`}</span>
       }
     >
+      <div role="group" aria-label="Presets" className="mb-3 flex flex-wrap gap-2">
+        {presets.map((preset) => {
+          const active = valid && presetActive(preset, parsed.params);
+          return (
+            <Button
+              key={preset.label}
+              type="button"
+              variant="outline"
+              size="sm"
+              title={preset.note}
+              aria-pressed={active}
+              onClick={() => setText(togglePreset(shown, preset, active))}
+              className={cn("h-8", active && "border-primary bg-primary/10")}
+            >
+              {active ? <Check className="size-3.5" /> : <Plus className="size-3.5" />}
+              {preset.label}
+            </Button>
+          );
+        })}
+      </div>
       <form onSubmit={submit} className="flex flex-col gap-3">
         <textarea
           aria-label="Parameters"
           value={shown}
           onChange={(event) => setText(event.target.value)}
-          placeholder={"SIM_WIND_SPD 7\nSIM_WIND_DIR 270\nSIM_BATT_VOLTAGE 14.8"}
-          rows={5}
+          placeholder="Empty: the airframe's own defaults"
+          rows={6}
           spellCheck={false}
-          aria-invalid={parsed === null}
-          className="min-h-24 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 font-mono text-[13px] tabular-nums outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive"
+          aria-invalid={!valid}
+          aria-describedby="params-problems"
+          className="field-sizing-content min-h-32 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 font-mono text-[13px] tabular-nums outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/40"
         />
-        <Button type="submit" size="sm" className="h-9 self-end" disabled={!changed || switching !== null}>
-          {applying ? <LoaderCircle className="size-3.5 motion-safe:animate-spin" /> : <SlidersHorizontal className="size-3.5" />}
-          {applying ? "Applying…" : "Apply"}
-        </Button>
+        <div className="flex items-start gap-3">
+          <ul id="params-problems" role="alert" className="min-w-0 flex-1 text-xs text-destructive">
+            {problems.map((problem) => (
+              <li key={problem}>{problem}</li>
+            ))}
+            {problems.length === 0 && applied !== null && !changed && !applying && (
+              <li className="text-success">
+                {applied === 0 ? "Restarted with the airframe's own defaults." : `Restarted with ${applied} parameter${applied === 1 ? "" : "s"}.`}
+              </li>
+            )}
+          </ul>
+          <Button type="submit" size="sm" className="h-9 shrink-0" disabled={!changed || switching !== null}>
+            {applying ? <LoaderCircle className="size-3.5 motion-safe:animate-spin" /> : <SlidersHorizontal className="size-3.5" />}
+            {applying ? "Applying…" : "Apply"}
+          </Button>
+        </div>
       </form>
       <p className="mt-3 text-xs text-muted-foreground">
         One <span className="font-mono">NAME value</span> per line, set over the airframe's defaults every time the simulator starts.
         Applying restarts the simulator for everyone connected.
-        {error && <span className="ml-1 text-destructive">{error}</span>}
       </p>
     </Panel>
   );
