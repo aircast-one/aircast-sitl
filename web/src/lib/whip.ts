@@ -51,7 +51,7 @@ export function publishWhip(track: MediaStreamTrack, url: string, downscale = 1)
     session.timer = session.stopped ? undefined : setTimeout(start, RETRY_MS);
   };
 
-  const start = () =>
+  const start = () => {
     connect(track, url, downscale)
       .then((pc) => {
         if (session.stopped) return pc.close();
@@ -63,6 +63,7 @@ export function publishWhip(track: MediaStreamTrack, url: string, downscale = 1)
         );
       })
       .catch(retry);
+  };
 
   start();
 

@@ -64,12 +64,10 @@ function sampledHeight(heightAt: HeightAt) {
     if (key !== cache.key && now >= cache.due) {
       cache.key = key;
       cache.due = now + RESAMPLE_MS;
+      const forget = () => Object.assign(cache, { key: "" });
       heightAt(Cartographic.fromDegrees(lng, lat))
-        .catch(() => undefined)
-        .then((height) => {
-          if (height === undefined) cache.key = "";
-          else cache.height = height;
-        });
+        .then((height) => (height === undefined ? forget() : Object.assign(cache, { height })))
+        .catch(forget);
     }
     return cache.height;
   };

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 
 export interface Telemetry {
   roll: number;
@@ -71,109 +71,97 @@ interface MavlinkMessage {
   [key: string]: unknown;
 }
 
+const RECONNECT_MS = 2000;
+
 export function bridgeUrl() {
   const wsHost = window.location.hostname || "localhost";
   return window.location.protocol === "https:" ? `wss://${wsHost}/ws` : `ws://${wsHost}:8889`;
 }
 
+const parse = (data: string): MavlinkMessage | undefined => {
+  try {
+    return (JSON.parse(data) as MavlinkMessage | null) ?? undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const withPosition = (prev: Telemetry, msg: MavlinkMessage): Telemetry => {
+  const lat = msg.lat as number;
+  const lng = msg.lng as number;
+  const fix = lat !== 0 || lng !== 0;
+  const rehome = fix && (!prev.homeSet || !prev.armed);
+  return {
+    ...prev,
+    lat,
+    lng,
+    alt: msg.alt as number,
+    relativeAlt: msg.relative_alt as number,
+    vx: msg.vx as number,
+    vy: msg.vy as number,
+    vz: msg.vz as number,
+    heading: msg.hdg as number,
+    homeSet: prev.homeSet || fix,
+    homeLat: rehome ? lat : prev.homeLat,
+    homeLng: rehome ? lng : prev.homeLng,
+  };
+};
+
+const applyMessage = (prev: Telemetry, msg: MavlinkMessage): Telemetry => {
+  switch (msg.type) {
+    case "ATTITUDE":
+      return { ...prev, roll: msg.roll as number, pitch: msg.pitch as number, yaw: msg.yaw as number };
+    case "GLOBAL_POSITION_INT":
+      return withPosition(prev, msg);
+    case "VFR_HUD":
+      return {
+        ...prev,
+        groundspeed: msg.groundspeed as number,
+        airspeed: msg.airspeed as number,
+        heading: msg.heading as number,
+        throttle: msg.throttle as number,
+        climb: msg.climb as number,
+      };
+    case "GIMBAL":
+      return { ...prev, gimbal: { pitch: msg.pitch as number, yaw: msg.yaw as number, earthYaw: msg.earth_yaw as boolean } };
+    case "CAR":
+      return { ...prev, car: { lat: msg.lat as number, lng: msg.lng as number, heading: ((msg.hdg as number) * Math.PI) / 180 } };
+    case "HEARTBEAT":
+      return { ...prev, armed: msg.armed as boolean, mode: msg.mode as number, heartbeatAt: Date.now() };
+    default:
+      return prev;
+  }
+};
+
 export function useTelemetry() {
   const [telemetry, setTelemetry] = useState<Telemetry>(initialTelemetry);
-  const telemetryRef = useRef<Telemetry>(initialTelemetry);
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-
-  const handleMessage = useCallback((msg: MavlinkMessage) => {
-    const prev = telemetryRef.current;
-    let next = prev;
-
-    switch (msg.type) {
-      case "ATTITUDE":
-        next = {
-          ...prev,
-          roll: msg.roll as number,
-          pitch: msg.pitch as number,
-          yaw: msg.yaw as number,
-        };
-        break;
-      case "GLOBAL_POSITION_INT": {
-        const lat = msg.lat as number;
-        const lng = msg.lng as number;
-        const fix = lat !== 0 || lng !== 0;
-        const rehome = fix && (!prev.homeSet || !prev.armed);
-        next = {
-          ...prev,
-          lat,
-          lng,
-          alt: msg.alt as number,
-          relativeAlt: msg.relative_alt as number,
-          vx: msg.vx as number,
-          vy: msg.vy as number,
-          vz: msg.vz as number,
-          heading: msg.hdg as number,
-          homeSet: prev.homeSet || fix,
-          homeLat: rehome ? lat : prev.homeLat,
-          homeLng: rehome ? lng : prev.homeLng,
-        };
-        break;
-      }
-      case "VFR_HUD":
-        next = {
-          ...prev,
-          groundspeed: msg.groundspeed as number,
-          airspeed: msg.airspeed as number,
-          heading: msg.heading as number,
-          throttle: msg.throttle as number,
-          climb: msg.climb as number,
-        };
-        break;
-      case "GIMBAL":
-        next = { ...prev, gimbal: { pitch: msg.pitch as number, yaw: msg.yaw as number, earthYaw: msg.earth_yaw as boolean } };
-        break;
-      case "CAR":
-        next = { ...prev, car: { lat: msg.lat as number, lng: msg.lng as number, heading: ((msg.hdg as number) * Math.PI) / 180 } };
-        break;
-      case "HEARTBEAT":
-        next = { ...prev, armed: msg.armed as boolean, mode: msg.mode as number, heartbeatAt: Date.now() };
-        break;
-    }
-
-    telemetryRef.current = next;
-    setTelemetry(next);
-  }, []);
-
-  const connect = useCallback(() => {
-    const ws = new WebSocket(bridgeUrl());
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      telemetryRef.current = { ...telemetryRef.current, connected: true };
-      setTelemetry(telemetryRef.current);
-    };
-
-    ws.onclose = () => {
-      telemetryRef.current = { ...telemetryRef.current, connected: false };
-      setTelemetry(telemetryRef.current);
-      reconnectRef.current = setTimeout(connect, 2000);
-    };
-
-    ws.onerror = () => ws.close();
-
-    ws.onmessage = (event) => {
-      try {
-        handleMessage(JSON.parse(event.data));
-      } catch {
-        return;
-      }
-    };
-  }, [handleMessage]);
 
   useEffect(() => {
+    const link: { socket?: WebSocket; retry?: ReturnType<typeof setTimeout>; stopped: boolean } = { stopped: false };
+    const setConnected = (connected: boolean) => setTelemetry((prev) => ({ ...prev, connected }));
+
+    const connect = () => {
+      const socket = new WebSocket(bridgeUrl());
+      socket.onopen = () => setConnected(true);
+      socket.onclose = () => {
+        setConnected(false);
+        link.retry = link.stopped ? undefined : setTimeout(connect, RECONNECT_MS);
+      };
+      socket.onerror = () => socket.close();
+      socket.onmessage = ({ data }: MessageEvent<string>) => {
+        const msg = parse(data);
+        if (msg) setTelemetry((prev) => applyMessage(prev, msg));
+      };
+      link.socket = socket;
+    };
+
     connect();
     return () => {
-      clearTimeout(reconnectRef.current);
-      wsRef.current?.close();
+      link.stopped = true;
+      clearTimeout(link.retry);
+      link.socket?.close();
     };
-  }, [connect]);
+  }, []);
 
   return telemetry;
 }
