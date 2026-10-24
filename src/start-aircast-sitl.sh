@@ -10,11 +10,13 @@ AIRCAST_PARAMS=/usr/local/share/aircast
 shutdown() {
     echo "Shutting down Aircast SITL..."
     kill -TERM "$ws_bridge_pid" 2>/dev/null || true
+    kill -TERM "$mediamtx_pid" 2>/dev/null || true
     kill -TERM "$car_pid" 2>/dev/null || true
     kill -TERM "$web_pid" 2>/dev/null || true
     kill -TERM "$router_pid" 2>/dev/null || true
     kill -TERM "$sitl_pid" 2>/dev/null || true
     wait "$ws_bridge_pid" 2>/dev/null || true
+    wait "$mediamtx_pid" 2>/dev/null || true
     wait "$web_pid" 2>/dev/null || true
     wait "$router_pid" 2>/dev/null || true
     wait "$sitl_pid" 2>/dev/null || true
@@ -28,9 +30,13 @@ python3 /opt/aircast/serve.py &
 web_pid=$!
 echo "Web interface started on port 8888"
 
-MAVLINK20=1 MAVLINK_PORT=5760 PYTHONUNBUFFERED=1 python3 /opt/aircast/ws_bridge.py &
+MAVLINK20=1 MAVLINK_PORT=5760 PYTHONUNBUFFERED=1 SIM_CAMERA=1 python3 /opt/aircast/ws_bridge.py &
 ws_bridge_pid=$!
 echo "WebSocket MAVLink bridge started on port 8889 (PID $ws_bridge_pid)"
+
+mediamtx /opt/aircast/mediamtx.yml &
+mediamtx_pid=$!
+echo "Camera relay started: RTSP 8554, WebRTC 8890, ICE/TCP 8189 (PID $mediamtx_pid)"
 
 ARGS=()
 SKIP_NEXT=false

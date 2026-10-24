@@ -1,0 +1,22 @@
+logLevel: warn
+rtmp: false
+hls: false
+srt: false
+moq: false
+rtspTransports: [tcp]
+webrtcAddress: :8890
+webrtcLocalUDPAddress: ""
+webrtcLocalTCPAddress: :8189
+authInternalUsers:
+  - user: any
+    permissions:
+      - action: read
+  - user: publisher
+    pass: ""
+    permissions:
+      - action: publish
+paths:
+  "~^(sim|shoot)$":
+    runOnDemand: python3 /opt/aircast/demand.py
+    runOnDemandStartTimeout: 30s
+    runOnDemandCloseAfter: 30s

@@ -50,6 +50,7 @@ export function CameraPage() {
     telemetryRef.current = telemetry;
   }, [telemetry]);
   const whipUrl = params.get("whip");
+  const publisher = params.get("publisher");
 
   useEffect(() => {
     const viewer = viewerRef.current;
@@ -87,12 +88,12 @@ export function CameraPage() {
     if (!whipUrl || !viewer || viewer.isDestroyed()) return;
 
     const [track] = viewer.canvas.captureStream(FRAME_RATE).getVideoTracks();
-    const stop = publishWhip(track, whipUrl, SUPERSAMPLE);
+    const stop = publishWhip(track, whipUrl, SUPERSAMPLE, publisher);
     return () => {
       stop();
       track.stop();
     };
-  }, [viewerRef, whipUrl]);
+  }, [viewerRef, whipUrl, publisher]);
 
   const { name } = camera;
   return (

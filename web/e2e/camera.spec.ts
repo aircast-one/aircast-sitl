@@ -34,14 +34,20 @@ test.describe("Camera Page", () => {
     expect(criticalErrors).toEqual([]);
   });
 
-  test("the dashboard's views lead to each camera and back", async ({ page }) => {
-    for (const camera of ["FPV camera", "Payload camera"]) {
-      await page.goto("/");
-      await page.getByRole("complementary").getByRole("link", { name: new RegExp(`^${camera}`) }).click();
-      await expect(page).toHaveTitle(`${camera} · Aircast SITL`);
-      await page.getByRole("link", { name: "SITL Dashboard" }).click();
-      await expect(page).toHaveURL("/");
-      await expect(page.getByRole("heading", { name: "Aircast SITL" })).toBeVisible();
-    }
+  test("the dashboard opens each camera's live stream in a new tab and lists its RTSP address", async ({ page }) => {
+    await page.goto("/");
+    const sidebar = page.getByRole("complementary");
+    const cameras = [
+      { name: "FPV camera", feed: "sim" },
+      { name: "Payload camera", feed: "shoot" },
+    ];
+    await Promise.all(
+      cameras.map(async ({ name, feed }) => {
+        const live = sidebar.getByRole("link", { name: new RegExp(`^${name}`) });
+        await expect(live).toHaveAttribute("href", `http://localhost:8890/${feed}/`);
+        await expect(live).toHaveAttribute("target", "_blank");
+        await expect(sidebar.getByText(`rtsp://localhost:8554/${feed}`, { exact: true })).toBeVisible();
+      }),
+    );
   });
 });

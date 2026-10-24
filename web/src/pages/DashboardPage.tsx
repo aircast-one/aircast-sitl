@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Cartographic, EllipsoidGeodesic } from "cesium";
-import { ArrowRight, Check, Copy, LoaderCircle, MapPin, Plus, RotateCcw, SlidersHorizontal } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Check, Copy, LoaderCircle, MapPin, Plus, RotateCcw, SlidersHorizontal } from "lucide-react";
 import { useTelemetry, type Telemetry } from "@/hooks/useTelemetry.ts";
 import { AirframeIcon, type AirframeId } from "@/components/Airframe.tsx";
 import { Attitude } from "@/components/Attitude.tsx";
@@ -254,7 +254,7 @@ export function DashboardPage() {
         <aside className="flex min-w-0 flex-col gap-4">
           <ConnectPanel host={host} />
           <CarPanel car={car} telemetry={telemetry} live={link === "live"} error={carError} onSpeed={handleCarSpeed} />
-          <ViewsPanel />
+          <ViewsPanel host={host} />
         </aside>
       </main>
 
@@ -592,6 +592,8 @@ function ConnectPanel({ host }: { host: string }) {
     },
     { label: "MAVProxy", hint: "CLI", value: `mavproxy.py --master=tcp:${host}:5760` },
     { label: "Python MAVLink", hint: "pymavlink", value: `mavutil.mavlink_connection("tcp:${host}:5760")` },
+    { label: "FPV camera", hint: "RTSP", value: `rtsp://${host}:8554/sim` },
+    { label: "Payload camera", hint: "RTSP", value: `rtsp://${host}:8554/shoot` },
   ];
   return (
     <Panel label="Connect">
@@ -602,7 +604,7 @@ function ConnectPanel({ host }: { host: string }) {
       </ul>
       <p className="mt-4 text-xs text-muted-foreground">
         Ports <span className="font-mono">TCP 5760</span> · <span className="font-mono">UDP 14550</span> ·{" "}
-        <span className="font-mono">FlightGear 9005</span>
+        <span className="font-mono">RTSP 8554</span> · <span className="font-mono">FlightGear 9005</span>
       </p>
     </Panel>
   );
@@ -688,27 +690,43 @@ function CarPanel({
   );
 }
 
-function ViewsPanel() {
-  const views = [
-    { to: "/fpv", title: "3D view", text: "CesiumJS terrain with the live aircraft and HUD" },
-    { to: "/camera", title: "FPV camera", text: "What the tracking gimbal streams" },
-    { to: "/camera?gimbal=2", title: "Payload camera", text: "What the payload gimbal streams" },
+const liveVideo = (host: string, feed: string) =>
+  window.location.protocol === "https:" ? `https://${host}/video/${feed}/` : `http://${host}:8890/${feed}/`;
+
+function ViewsPanel({ host }: { host: string }) {
+  const rowClass = "group -mx-2 flex items-center gap-3 rounded-md px-2 py-2 transition-colors hover:bg-accent";
+  const iconClass = "size-4 text-muted-foreground transition-colors group-hover:text-foreground";
+  const cameras = [
+    { feed: "sim", title: "FPV camera", text: "Live from the tracking gimbal" },
+    { feed: "shoot", title: "Payload camera", text: "Live from the payload gimbal" },
   ];
   return (
     <Panel label="Views">
       <ul className="-my-1 flex flex-col">
-        {views.map((view) => (
-          <li key={view.to}>
-            <Link to={view.to} className="group -mx-2 flex items-center gap-3 rounded-md px-2 py-2 transition-colors hover:bg-accent">
-              <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-medium">{view.title}</p>
-                <p className="truncate text-xs text-muted-foreground">{view.text}</p>
-              </div>
-              <ArrowRight className="size-4 text-muted-foreground transition-colors group-hover:text-foreground" />
-            </Link>
+        <li>
+          <Link to="/fpv" className={rowClass}>
+            <ViewText title="3D view" text="CesiumJS terrain with the live aircraft and HUD" />
+            <ArrowRight className={iconClass} />
+          </Link>
+        </li>
+        {cameras.map((camera) => (
+          <li key={camera.feed}>
+            <a href={liveVideo(host, camera.feed)} target="_blank" rel="noreferrer" className={rowClass}>
+              <ViewText title={camera.title} text={camera.text} />
+              <ArrowUpRight className={iconClass} />
+            </a>
           </li>
         ))}
       </ul>
     </Panel>
+  );
+}
+
+function ViewText({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="min-w-0 flex-1">
+      <p className="text-[13px] font-medium">{title}</p>
+      <p className="truncate text-xs text-muted-foreground">{text}</p>
+    </div>
   );
 }

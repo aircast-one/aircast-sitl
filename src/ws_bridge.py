@@ -102,7 +102,18 @@ def connect_mavlink(host, port):
 
 
 clients = set()
+demands = {}
 car_box = {'box': None, 'at': 0.0}
+
+
+def demand_message():
+    return json.dumps({'type': 'CAMERA_DEMAND', 'feeds': sorted(set(demands.values()))})
+
+
+async def broadcast(payload):
+    sockets = list(clients)
+    results = await asyncio.gather(*(ws.send(payload) for ws in sockets), return_exceptions=True)
+    clients.difference_update(ws for ws, result in zip(sockets, results) if isinstance(result, websockets.ConnectionClosed))
 
 
 def report_from(message):
@@ -145,15 +156,22 @@ async def ws_handler(websocket, mavlink_host, mavlink_port):
     addr = websocket.remote_address
     print(f'WebSocket client connected: {addr}')
     try:
+        await websocket.send(demand_message())
         async for message in websocket:
             report = report_from(message)
             if report and report.get('type') == 'CAR_BOX':
                 note_car_box(report)
+            elif report and report.get('type') == 'CAMERA_DEMAND' and isinstance(report.get('feed'), str):
+                demands[websocket] = report['feed']
+                print(f'Camera feed {report["feed"]} demanded')
+                await broadcast(demand_message())
     except websockets.ConnectionClosed:
         pass
     finally:
         clients.discard(websocket)
         print(f'WebSocket client disconnected: {addr}')
+        if demands.pop(websocket, None) is not None:
+            await broadcast(demand_message())
 
 
 async def mavlink_reader(mavlink_host, mavlink_port):
@@ -172,15 +190,7 @@ async def mavlink_reader(mavlink_host, mavlink_port):
                     streamed_at = time.monotonic()
                 data = msg_to_json(msg, mav.target_system)
                 if data and clients:
-                    payload = json.dumps(data)
-                    dead = []
-                    for ws in clients.copy():
-                        try:
-                            await ws.send(payload)
-                        except websockets.ConnectionClosed:
-                            dead.append(ws)
-                    for ws in dead:
-                        clients.discard(ws)
+                    await broadcast(json.dumps(data))
             else:
                 await asyncio.sleep(0.01)
         except Exception as e:

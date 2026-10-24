@@ -10,13 +10,12 @@ udp_ports := "14550-14555:14550-14555/udp"
 fg_port   := "9005:9005"
 web_port  := "8888:8888"
 
-sitl_host      := "sitl.aircast.one"
-mediamtx_image := "bluenviron/mediamtx:1.21.2"
-camera_port    := "5174"
-chrome         := "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-unreal_root    := "/Users/Shared/Epic Games/UE_5.8"
-tailscale      := "/Applications/Tailscale.app/Contents/MacOS/Tailscale"
-cesium_unreal  := "2.30.0"
+camera_ports := "-p 8889:8889 -p 8554:8554 -p 8890:8890 -p 8189:8189"
+
+sitl_site     := "https://sitl.aircast.one"
+camera_agent  := "one.aircast.sitl-camera"
+unreal_root   := "/Users/Shared/Epic Games/UE_5.8"
+cesium_unreal := "2.30.0"
 
 # List available recipes
 default:
@@ -63,7 +62,7 @@ build-multi:
         .
     echo "✅ Multi-arch build complete: {{full_image}}"
 
-# Run the SITL container (MAVLink TCP 5760-5765, UDP 14550-14555, web 8888)
+# Run the SITL container (MAVLink TCP 5760-5765, UDP 14550-14555, web 8888, cameras: RTSP 8554, WebRTC 8890)
 [group('run')]
 run:
     #!/usr/bin/env bash
@@ -73,6 +72,7 @@ run:
     echo "  TCP: localhost:5760-5765"
     echo "  UDP: localhost:14550-14555"
     echo "Web interface: http://localhost:8888"
+    echo "Cameras (while \`just camera http://localhost:8888\` runs): rtsp://localhost:8554/sim, /shoot"
     echo ""
     echo "Press Ctrl+C to stop..."
     docker run --rm -it \
@@ -81,51 +81,64 @@ run:
         -p {{udp_ports}} \
         -p {{fg_port}} \
         -p {{web_port}} \
+        {{camera_ports}} \
+        -e MTX_WEBRTCADDITIONALHOSTS=127.0.0.1 \
         {{full_image}}
 
-# Render the SITL's cameras at `host` and serve them as rtsp://<this mac>:8554/sim (FPV gimbal) and /shoot (payload gimbal). look: photoreal | satellite | unreal (unreal renders /sim only)
+# Render the SITL's cameras on this Mac whenever someone watches rtsp://<site>:8554/sim (FPV gimbal) or /shoot (payload gimbal). look: photoreal | satellite | unreal (unreal renders /sim only)
 [group('run')]
-camera host=sitl_host look="photoreal":
+camera site=sitl_site look="photoreal":
     #!/usr/bin/env bash
     set -euo pipefail
-    profile=$(mktemp -d)
-    profile2=$(mktemp -d)
-    trap 'kill $(jobs -p) 2>/dev/null; docker rm -f aircast-sitl-camera >/dev/null 2>&1; rm -rf "$profile" "$profile2"' EXIT
-    docker rm -f aircast-sitl-camera >/dev/null 2>&1 || true
-    docker run -d --rm --name aircast-sitl-camera \
-        -e MTX_RTMP=no -e MTX_HLS=no -e MTX_SRT=no -e MTX_RTSPTRANSPORTS=tcp \
-        -e MTX_WEBRTCADDITIONALHOSTS=127.0.0.1 \
-        -p 8554:8554 -p 8899:8889 -p 8189:8189/udp {{mediamtx_image}} >/dev/null
-    MAVLINK_HOST={{host}} MAVLINK_PORT=5760 PYTHONUNBUFFERED=1 MAVLINK20=1 SIM_CAMERA=1 \
-        uv run --quiet --no-project --with pymavlink --with websockets python src/ws_bridge.py &
-    token=$(gh variable get VITE_CESIUM_ION_TOKEN -R aircast-one/aircast-sitl)
+    [ "{{look}}" != unreal ] || just unreal-build
+    export SITL_SITE="{{site}}" CAMERA_LOOK="{{look}}" PYTHONUNBUFFERED=1
+    export CAMERA_PUBLISHER_PASS="$(security find-generic-password -s {{camera_agent}} -w 2>/dev/null || true)"
     if [ "{{look}}" = unreal ]; then
-        just unreal-build
-        "{{unreal_root}}/Engine/Binaries/Mac/UnrealEditor.app/Contents/MacOS/UnrealEditor" \
-            "$PWD/unreal/AircastSim.uproject" -game -windowed -ResX=1280 -ResY=720 -log \
-            -Telemetry=ws://127.0.0.1:8889 -Rtsp=rtsp://127.0.0.1:8554/sim -IonToken="$token" &
-    else
-        (cd web && npm install --prefer-offline --no-audit --no-fund --silent \
-            && VITE_CESIUM_ION_TOKEN="$token" exec node_modules/.bin/vite --port {{camera_port}} --strictPort --logLevel warn) &
-        until curl -sf -o /dev/null http://localhost:{{camera_port}}; do sleep 1; done
-        "{{chrome}}" --headless --user-data-dir="$profile" --window-size=1280,720 \
-            --disable-features=WebRtcHideLocalIpsWithMdns \
-            --disable-background-timer-throttling --disable-renderer-backgrounding \
-            "http://localhost:{{camera_port}}/camera?look={{look}}&whip=http://localhost:8899/sim/whip" 2>/dev/null &
-        "{{chrome}}" --headless --user-data-dir="$profile2" --window-size=1280,720 \
-            --disable-features=WebRtcHideLocalIpsWithMdns \
-            --disable-background-timer-throttling --disable-renderer-backgrounding \
-            "http://localhost:{{camera_port}}/camera?look={{look}}&gimbal=2&whip=http://localhost:8899/shoot/whip" 2>/dev/null &
+        export CESIUM_ION_TOKEN="$(gh variable get VITE_CESIUM_ION_TOKEN -R aircast-one/aircast-sitl)"
     fi
-    echo "Vehicle: TCP {{host}}:5760"
-    echo "Camera (FPV gimbal):   rtsp://$(ipconfig getifaddr en0):8554/sim"
-    [ "{{look}}" = unreal ] || echo "Camera (payload/shoot): rtsp://$(ipconfig getifaddr en0):8554/shoot"
-    tailnet=$("{{tailscale}}" ip -4 2>/dev/null || true)
-    if [ -n "$tailnet" ]; then
-        echo "Tailnet (FPV gimbal):   rtsp://$tailnet:8554/sim"
-        [ "{{look}}" = unreal ] || echo "Tailnet (payload/shoot): rtsp://$tailnet:8554/shoot"
-    fi
-    wait
+    exec uv run --quiet --no-project --with websockets python src/camera_agent.py
+
+# Keep `just camera` running at login, so the cloud feeds render on this Mac on demand
+[group('run')]
+camera-install site=sitl_site look="photoreal":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    security find-generic-password -s {{camera_agent}} >/dev/null 2>&1 || {
+        echo "Store the publisher password first: security add-generic-password -s {{camera_agent}} -a publisher -w '<password from Bitwarden>'"
+        exit 1
+    }
+    plist="$HOME/Library/LaunchAgents/{{camera_agent}}.plist"
+    mkdir -p "$(dirname "$plist")"
+    cat > "$plist" <<EOF
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+    <dict>
+      <key>Label</key><string>{{camera_agent}}</string>
+      <key>ProgramArguments</key>
+      <array>
+        <string>$(command -v just)</string>
+        <string>--justfile</string><string>$PWD/justfile</string>
+        <string>camera</string><string>{{site}}</string><string>{{look}}</string>
+      </array>
+      <key>EnvironmentVariables</key>
+      <dict><key>PATH</key><string>$PATH</string></dict>
+      <key>RunAtLoad</key><true/>
+      <key>KeepAlive</key><true/>
+      <key>StandardOutPath</key><string>$HOME/Library/Logs/{{camera_agent}}.log</string>
+      <key>StandardErrorPath</key><string>$HOME/Library/Logs/{{camera_agent}}.log</string>
+    </dict>
+    </plist>
+    EOF
+    launchctl bootout "gui/$(id -u)/{{camera_agent}}" 2>/dev/null || true
+    launchctl bootstrap "gui/$(id -u)" "$plist"
+    echo "Camera agent runs at login for {{site}}; log: ~/Library/Logs/{{camera_agent}}.log"
+
+# Stop rendering cameras on this Mac at login
+[group('run')]
+camera-uninstall:
+    launchctl bootout "gui/$(id -u)/{{camera_agent}}" 2>/dev/null || true
+    rm -f "$HOME/Library/LaunchAgents/{{camera_agent}}.plist"
 
 # Fetch the pinned Cesium for Unreal and build the Unreal camera project
 [group('build')]

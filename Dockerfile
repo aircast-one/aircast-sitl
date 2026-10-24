@@ -70,6 +70,8 @@ RUN npm ci
 COPY web/ ./
 RUN npm run build
 
+FROM bluenviron/mediamtx:1.21.2 AS mediamtx
+
 FROM ubuntu:26.04
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -112,6 +114,9 @@ COPY --from=builder /src/Tools/autotest/models/plane.parm /usr/local/share/ardup
 
 COPY --from=frontend /app/dist /var/www/html/
 
+COPY --from=mediamtx /mediamtx /usr/local/bin/mediamtx
+COPY src/mediamtx.yml /opt/aircast/mediamtx.yml
+COPY src/demand.py /opt/aircast/demand.py
 COPY src/ws_bridge.py /opt/aircast/ws_bridge.py
 COPY src/camera.py /opt/aircast/camera.py
 COPY src/gimbal.parm /usr/local/share/aircast/gimbal.parm
@@ -138,7 +143,7 @@ COPY --chmod=755 src/start-aircast-sitl.sh /usr/local/bin/start-aircast-sitl.sh
 
 EXPOSE 5760 5761 5762 5763 5764 5765
 EXPOSE 14550/udp 14551/udp 14552/udp 14553/udp 14554/udp 14555/udp
-EXPOSE 9005 8888 8889
+EXPOSE 9005 8888 8889 8554 8890 8189
 
 ENTRYPOINT ["/usr/local/bin/start-aircast-sitl.sh"]
 CMD ["-S","-I0","-s","1","-w","--uartA","tcp:5766"]

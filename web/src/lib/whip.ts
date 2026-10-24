@@ -12,7 +12,7 @@ const iceGathered = (pc: RTCPeerConnection) =>
     check();
   });
 
-async function connect(track: MediaStreamTrack, url: string, downscale: number) {
+async function connect(track: MediaStreamTrack, url: string, downscale: number, credentials: string | null) {
   const pc = new RTCPeerConnection();
   try {
     pc.addTransceiver(track, {
@@ -25,7 +25,10 @@ async function connect(track: MediaStreamTrack, url: string, downscale: number) 
     await iceGathered(pc);
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/sdp" },
+      headers: {
+        "Content-Type": "application/sdp",
+        ...(credentials ? { Authorization: `Basic ${btoa(credentials)}` } : {}),
+      },
       body: pc.localDescription!.sdp,
     });
     if (!res.ok) throw new Error(`WHIP ${url} answered ${res.status}`);
@@ -37,7 +40,7 @@ async function connect(track: MediaStreamTrack, url: string, downscale: number) 
   }
 }
 
-export function publishWhip(track: MediaStreamTrack, url: string, downscale = 1): () => void {
+export function publishWhip(track: MediaStreamTrack, url: string, downscale = 1, credentials: string | null = null): () => void {
   const session: {
     pc?: RTCPeerConnection;
     timer?: ReturnType<typeof setTimeout>;
@@ -52,7 +55,7 @@ export function publishWhip(track: MediaStreamTrack, url: string, downscale = 1)
   };
 
   const start = () => {
-    connect(track, url, downscale)
+    connect(track, url, downscale, credentials)
       .then((pc) => {
         if (session.stopped) return pc.close();
         session.pc = pc;
