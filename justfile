@@ -12,6 +12,7 @@ web_port  := "8888:8888"
 
 sitl_host      := "sitl.aircast.one"
 mediamtx_image := "bluenviron/mediamtx:1.21.2"
+camera_port    := "5174"
 chrome         := "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 unreal_root    := "/Users/Shared/Epic Games/UE_5.8"
 tailscale      := "/Applications/Tailscale.app/Contents/MacOS/Tailscale"
@@ -104,12 +105,12 @@ camera host=sitl_host look="photoreal":
             -Telemetry=ws://127.0.0.1:8889 -Rtsp=rtsp://127.0.0.1:8554/sim -IonToken="$token" &
     else
         (cd web && npm install --prefer-offline --no-audit --no-fund --silent \
-            && VITE_CESIUM_ION_TOKEN="$token" exec node_modules/.bin/vite --strictPort --logLevel warn) &
-        until curl -sf -o /dev/null http://localhost:5174; do sleep 1; done
+            && VITE_CESIUM_ION_TOKEN="$token" exec node_modules/.bin/vite --port {{camera_port}} --strictPort --logLevel warn) &
+        until curl -sf -o /dev/null http://localhost:{{camera_port}}; do sleep 1; done
         "{{chrome}}" --headless --user-data-dir="$profile" --window-size=1280,720 \
             --disable-features=WebRtcHideLocalIpsWithMdns \
             --disable-background-timer-throttling --disable-renderer-backgrounding \
-            "http://localhost:5174/camera?look={{look}}&whip=http://localhost:8899/sim/whip" 2>/dev/null &
+            "http://localhost:{{camera_port}}/camera?look={{look}}&whip=http://localhost:8899/sim/whip" 2>/dev/null &
     fi
     echo "Vehicle: TCP {{host}}:5760"
     echo "Camera:  rtsp://$(ipconfig getifaddr en0):8554/sim"
