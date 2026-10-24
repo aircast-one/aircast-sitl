@@ -691,7 +691,7 @@ function CarPanel({
 }
 
 const liveVideo = (host: string, feed: string) =>
-  window.location.protocol === "https:" ? `https://${host}/video/${feed}/` : `http://${host}:8890/${feed}/`;
+  window.location.protocol === "https:" ? `https://${host}/${feed}/` : `http://${host}:8890/${feed}/`;
 
 function ViewsPanel({ host }: { host: string }) {
   const rowClass = "group -mx-2 flex items-center gap-3 rounded-md px-2 py-2 transition-colors hover:bg-accent";

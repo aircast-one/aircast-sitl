@@ -23,7 +23,7 @@ RECONNECT_S = 2
 HOST = urlsplit(SITE).hostname
 SECURE = SITE.startswith('https://')
 BRIDGE = f'wss://{HOST}/ws' if SECURE else f'ws://{HOST}:8889'
-WHIP = f'{SITE}/video' if SECURE else f'http://{HOST}:8890'
+WHIP = SITE if SECURE else f'http://{HOST}:8890'
 RTSP = f'rtsp://{PUBLISHER}@{HOST}:8554'
 
 
