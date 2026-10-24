@@ -3,7 +3,7 @@
 FROM ubuntu:26.04 AS builder
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG AP_TAG=Copter-4.5
+ARG AP_TAG=Copter-4.7.2
 
 RUN --mount=type=cache,target=/var/cache/apt \
     apt-get update \
@@ -12,7 +12,6 @@ RUN --mount=type=cache,target=/var/cache/apt \
       python3 python3-dev python3-pip python3-setuptools \
       build-essential \
       ccache \
-      gcc-arm-none-eabi \
       pkg-config \
       wget \
       curl \
@@ -47,10 +46,13 @@ RUN --mount=type=cache,id=ccache,target=/root/.ccache \
     ./waf plane -j$(nproc)
 
 FROM builder AS cuav-x7-sim-build
+ARG ARM_TOOLCHAIN=gcc-arm-none-eabi-10-2020-q4-major
 RUN --mount=type=cache,target=/var/cache/apt \
     apt-get update \
- && apt-get install -y --no-install-recommends libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib \
- && rm -rf /var/lib/apt/lists/*
+ && apt-get install -y --no-install-recommends bzip2 \
+ && rm -rf /var/lib/apt/lists/* \
+ && curl -fsSL https://firmware.ardupilot.org/Tools/STM32-tools/${ARM_TOOLCHAIN}-$(uname -m)-linux.tar.bz2 | tar -xj -C /opt
+ENV PATH=/opt/${ARM_TOOLCHAIN}/bin:$PATH
 COPY src/hwdef/ libraries/AP_HAL_ChibiOS/hwdef/
 RUN ./waf configure --board CUAV-X7-SimOnHardWare
 RUN --mount=type=cache,id=ccache,target=/root/.ccache \
@@ -146,4 +148,4 @@ EXPOSE 14550/udp 14551/udp 14552/udp 14553/udp 14554/udp 14555/udp
 EXPOSE 9005 8888 8889 8554 8890 8189
 
 ENTRYPOINT ["/usr/local/bin/start-aircast-sitl.sh"]
-CMD ["-S","-I0","-s","1","-w","--uartA","tcp:5766"]
+CMD ["-I0","-s","1","-w","--uartA","tcp:5766"]

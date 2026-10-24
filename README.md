@@ -1,6 +1,6 @@
 # Aircast SITL
 
-Docker-based ArduPilot SITL (Copter, Plane, QuadPlane) for ARM64 and AMD64.
+Docker-based ArduPilot 4.7.2 SITL (Copter, Plane, QuadPlane) for ARM64 and AMD64.
 
 ## Run
 
@@ -200,34 +200,50 @@ autopilot the same way.
 The copter flies by [`src/pilot.parm`](src/pilot.parm): 10 m/s and 45° in Loiter, 5 m/s climb, braking
 with no delay. Load the same file on the real drone so a flight rehearsed here handles the same in
 the air: Mission Planner's Full Parameter List → Load from file, or `param load pilot.parm` in
-MAVProxy. It uses ArduCopter 4.5 parameter names, as the SITL does. Check that the real airframe
-holds altitude at 45° before flying it hard.
+MAVProxy. Check that the real airframe holds altitude at 45° before flying it hard.
+
+It uses ArduCopter 4.7 parameter names, as the SITL does. 4.7 renamed several and moved them to SI
+units, so a drone on 4.6 or older takes these instead:
+
+| 4.7 | 4.6 and older |
+|---|---|
+| `ATC_ANGLE_MAX 45` | `ANGLE_MAX 4500` |
+| `LOIT_SPEED_MS 10` | `LOIT_SPEED 1000` |
+| `LOIT_ACC_MAX_M 20` | `LOIT_ACC_MAX 2000` |
+| `LOIT_BRK_ACC_M 12.5` | `LOIT_BRK_ACCEL 1250` |
+| `LOIT_BRK_JRK_M 30` | `LOIT_BRK_JERK 3000` |
+| `PILOT_SPD_UP 5` | `PILOT_SPEED_UP 500` |
+| `PILOT_ACC_Z 5` | `PILOT_ACCEL_Z 500` |
 
 The simulated copter is a 5" FPV-sized quad, [`src/racer.json`](src/racer.json): 0.65 kg, 0.22 m,
 hovering at 16% throttle with no motor slew limit, so it feels like a racer rather than a 3 kg camera
-drone. [`src/airframe.parm`](src/airframe.parm) holds its ArduCopter AutoTune gains (yaw acceleration
-limit left off); never load it on a real drone. Against the stock 3 kg SITL quad, a half-stick Acro
-roll reaches 90% of its rate in 60–110 ms instead of ~200 ms, and full throttle climbs at 35–38 m/s²
-instead of 10.5 m/s². Yaw is about the same, 200–230 ms, limited by the frame's yaw authority.
+drone. [`src/airframe.parm`](src/airframe.parm) holds its ArduCopter AutoTune gains; never load it on a
+real drone. 4.7 shapes attitude commands with a jerk limit, so it also sets `ATC_INPUT_TC` 0.05 (the
+default 0.15 halved the lean reached 0.2 s after a stick step) and `ATC_ACC_Y_MAX` 36000, which leaves
+yaw acceleration effectively unlimited as `0` did on 4.5 (4.7 reads `0` as 1800°/s²).
+
+Against the stock 3 kg SITL quad, a half-stick Acro roll reaches 90% of its rate in 60–110 ms instead
+of ~200 ms, and full throttle climbs at 35–38 m/s² instead of 10.5 m/s². Yaw is about the same,
+200–230 ms, limited by the frame's yaw authority.
 
 Measured in Loiter, from a stick step to the response:
 
 | Stick | Response |
 |---|---|
-| Forward, half | 12° lean at 0.2 s, 2.4 m/s at 1 s, 3.7 m/s at 3 s |
-| Forward, full | 0.5 m/s at 0.22 s, 5.9 m/s at 1 s, 9.4 m/s at 3 s |
+| Forward, half | 19° lean at 0.2 s, 2.6 m/s at 1 s, 3.6 m/s at 3 s |
+| Forward, full | 1 m/s at 0.22 s, 6.8 m/s at 1 s, 9.3 m/s at 3 s |
 | Released at full speed | stopped in 1.2 s |
-| Yaw, full | turning within 55–90 ms, 90% of full rate at 0.4–0.45 s |
-| Throttle, full | 0.3 m/s climb at 0.45 s, 4.1 m/s at 2 s |
+| Yaw, full | turning within 60–85 ms, 90% of full rate at 0.36 s |
+| Throttle, full | 0.4 m/s climb at 0.45 s, 4 m/s at 2 s |
 
 Loiter here holds the heading while the yaw stick is centred
 ([`src/ardupilot/loiter-holds-heading.patch`](src/ardupilot/loiter-holds-heading.patch)). Stock
-ArduCopter Loiter only holds the yaw rate, so swinging the lean around at 45° turns the nose: three
-full right-stick circles turned it 116°, against 0° with the patch. A real drone flies stock Loiter
-until it runs a build with the same patch.
+ArduCopter Loiter only holds the yaw rate, so swinging the lean around turns the nose: three full
+right-stick circles of 1–1.5 s each turned it 21–33° on stock 4.7.2 (115–180° on stock 4.5), against
+under 0.5° with the patch. A real drone flies stock Loiter until it runs a build with the same patch.
 
 Loiter turns the stick into a lean angle, so speed builds toward its limit with a time constant of
-`LOIT_SPEED` / (g · tan `LOIT_ANG_MAX`), about 1 s here. A lower top speed or a steeper lean shortens it.
+`LOIT_SPEED_MS` / (g · tan `LOIT_ANG_MAX`), about 1 s here. A lower top speed or a steeper lean shortens it.
 
 Acro flies on the rate loop alone (`ACRO_OPTIONS` 2). With ArduCopter's attitude hold on, releasing
 the yaw stick swung the nose back by 29–52% of the turn rate and took 0.7–0.9 s to settle. On the rate
@@ -235,7 +251,7 @@ loop alone, with the simulated airframe's `ATC_RAT_YAW_P` at 0.8, a half-stick y
 rate in 0.2 s and stops within 0.2 s, with no swing back.
 
 Acro has no trainer (`ACRO_TRAINER` 0): released sticks hold the attitude instead of levelling the
-copter, and roll and pitch are not capped at `ANGLE_MAX`.
+copter, and roll and pitch are not capped at `ATC_ANGLE_MAX`.
 
 ## License
 
