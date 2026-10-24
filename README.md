@@ -181,7 +181,7 @@ Presets fill in the common setups, and pressing one again takes it out:
 | Preset | Sets |
 |---|---|
 | Gripper | A servo gripper on output 12 that closes 2 s after each release, for several drops in a row |
-| 4 bays on 9–12 | Outputs 9–12 free for a servo per bay (`DO_SET_SERVO`), with the gimbal moved to 13–15 |
+| 4 bays on 9–12 | Outputs 9–12 free for a servo per bay (`DO_SET_SERVO`), with the FPV gimbal moved to 13–14 |
 | Wind | 7 m/s from the west |
 | Low battery | The battery under its low-voltage limit, so ArduPilot refuses to arm |
 
