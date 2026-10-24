@@ -28,7 +28,7 @@ python3 /opt/aircast/serve.py &
 web_pid=$!
 echo "Web interface started on port 8888"
 
-MAVLINK_PORT=5760 PYTHONUNBUFFERED=1 python3 /opt/aircast/ws_bridge.py &
+MAVLINK20=1 MAVLINK_PORT=5760 PYTHONUNBUFFERED=1 python3 /opt/aircast/ws_bridge.py &
 ws_bridge_pid=$!
 echo "WebSocket MAVLink bridge started on port 8889 (PID $ws_bridge_pid)"
 
