@@ -14,4 +14,21 @@ test.describe("Camera Page", () => {
     await expect(page.getByRole("button")).toHaveCount(0);
     await expect(page.getByRole("link")).toHaveCount(0);
   });
+
+  test("renders the fixed boresight (payload/shoot camera) view with no critical errors", async ({ page }) => {
+    const errors: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.type() === "error") errors.push(msg.text());
+    });
+
+    await page.goto("/camera?aim=fixed");
+    const canvas = page.locator(".cesium-widget canvas");
+    await expect(canvas).toBeVisible();
+    expect(await canvas.boundingBox()).toMatchObject({ width: 1280, height: 720 });
+
+    const criticalErrors = errors.filter(
+      (e) => !e.includes("WebSocket") && !e.includes("ERR_CONNECTION") && !e.includes("401") && !e.includes("RequestErrorEvent"),
+    );
+    expect(criticalErrors).toEqual([]);
+  });
 });

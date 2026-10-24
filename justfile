@@ -83,13 +83,14 @@ run:
         -p {{web_port}} \
         {{full_image}}
 
-# Render the onboard camera of the SITL at `host` and serve it as rtsp://<this mac>:8554/sim (look: photoreal | satellite | unreal)
+# Render the SITL's cameras at `host` and serve them as rtsp://<this mac>:8554/sim (2-axis FPV gimbal) and /shoot (fixed, payload-drop aim). look: photoreal | satellite | unreal (unreal renders /sim only)
 [group('run')]
 camera host=sitl_host look="photoreal":
     #!/usr/bin/env bash
     set -euo pipefail
     profile=$(mktemp -d)
-    trap 'kill $(jobs -p) 2>/dev/null; docker rm -f aircast-sitl-camera >/dev/null 2>&1; rm -rf "$profile"' EXIT
+    profile2=$(mktemp -d)
+    trap 'kill $(jobs -p) 2>/dev/null; docker rm -f aircast-sitl-camera >/dev/null 2>&1; rm -rf "$profile" "$profile2"' EXIT
     docker rm -f aircast-sitl-camera >/dev/null 2>&1 || true
     docker run -d --rm --name aircast-sitl-camera \
         -e MTX_RTMP=no -e MTX_HLS=no -e MTX_SRT=no -e MTX_RTSPTRANSPORTS=tcp \
@@ -111,11 +112,19 @@ camera host=sitl_host look="photoreal":
             --disable-features=WebRtcHideLocalIpsWithMdns \
             --disable-background-timer-throttling --disable-renderer-backgrounding \
             "http://localhost:{{camera_port}}/camera?look={{look}}&whip=http://localhost:8899/sim/whip" 2>/dev/null &
+        "{{chrome}}" --headless --user-data-dir="$profile2" --window-size=1280,720 \
+            --disable-features=WebRtcHideLocalIpsWithMdns \
+            --disable-background-timer-throttling --disable-renderer-backgrounding \
+            "http://localhost:{{camera_port}}/camera?look={{look}}&aim=fixed&whip=http://localhost:8899/shoot/whip" 2>/dev/null &
     fi
     echo "Vehicle: TCP {{host}}:5760"
-    echo "Camera:  rtsp://$(ipconfig getifaddr en0):8554/sim"
+    echo "Camera (FPV gimbal):   rtsp://$(ipconfig getifaddr en0):8554/sim"
+    [ "{{look}}" = unreal ] || echo "Camera (payload/shoot): rtsp://$(ipconfig getifaddr en0):8554/shoot"
     tailnet=$("{{tailscale}}" ip -4 2>/dev/null || true)
-    [ -z "$tailnet" ] || echo "Tailnet: rtsp://$tailnet:8554/sim"
+    if [ -n "$tailnet" ]; then
+        echo "Tailnet (FPV gimbal):   rtsp://$tailnet:8554/sim"
+        [ "{{look}}" = unreal ] || echo "Tailnet (payload/shoot): rtsp://$tailnet:8554/shoot"
+    fi
     wait
 
 # Fetch the pinned Cesium for Unreal and build the Unreal camera project

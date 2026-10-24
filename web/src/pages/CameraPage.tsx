@@ -4,7 +4,7 @@ import { Cartesian3, JulianDate, createWorldTerrainAsync } from "cesium";
 import { bridgeUrl, useTelemetry } from "@/hooks/useTelemetry.ts";
 import { useCesiumViewer } from "@/hooks/useCesiumViewer.ts";
 import { addCar } from "@/lib/car.ts";
-import { HOME_POSE, homeAltitude, smoothPose, terrainHeight, tilesHeight } from "@/lib/pose.ts";
+import { boresightAim, cameraAim, HOME_POSE, homeAltitude, smoothPose, terrainHeight, tilesHeight } from "@/lib/pose.ts";
 import { publishWhip } from "@/lib/whip.ts";
 
 const FRAME_RATE = 30;
@@ -23,6 +23,7 @@ export function CameraPage() {
   const telemetry = useTelemetry();
   const [params] = useSearchParams();
   const photorealistic = params.get("look") !== "satellite";
+  const aim = params.get("aim") === "fixed" ? boresightAim : cameraAim;
   const { viewerRef } = useCesiumViewer(containerRef, { photorealistic });
   const telemetryRef = useRef(telemetry);
   useEffect(() => {
@@ -53,7 +54,7 @@ export function CameraPage() {
     }, BOX_REPORT_MS);
 
     const removeListener = viewer.scene.preRender.addEventListener(() => {
-      pose.current = smoothPose(pose.current, telemetryRef.current, altitude);
+      pose.current = smoothPose(pose.current, telemetryRef.current, altitude, aim);
       viewer.camera.setView({
         destination: Cartesian3.fromDegrees(pose.current.lng, pose.current.lat, pose.current.alt),
         orientation: { heading: pose.current.aimHeading, pitch: pose.current.aimPitch, roll: 0 },
@@ -65,7 +66,7 @@ export function CameraPage() {
       clearInterval(reporting);
       bridge.current.close();
     };
-  }, [viewerRef, photorealistic]);
+  }, [viewerRef, photorealistic, aim]);
 
   useEffect(() => {
     const viewer = viewerRef.current;

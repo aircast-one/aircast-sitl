@@ -85,19 +85,23 @@ export function homeAltitude(heightAt: HeightAt): Altitude {
   };
 }
 
-export function cameraAim(t: Telemetry): { heading: number; pitch: number } {
+export type Aim = (t: Telemetry) => { heading: number; pitch: number };
+
+export const cameraAim: Aim = (t) => {
   if (!t.gimbal) return { heading: t.yaw, pitch: FIXED_TILT };
   return { heading: t.gimbal.earthYaw ? t.gimbal.yaw : t.yaw + t.gimbal.yaw, pitch: t.gimbal.pitch };
-}
+};
 
-export function smoothPose(prev: Pose, t: Telemetry, altitude: Altitude): Pose {
+export const boresightAim: Aim = (t) => ({ heading: t.yaw, pitch: t.pitch });
+
+export function smoothPose(prev: Pose, t: Telemetry, altitude: Altitude, aim: Aim = cameraAim): Pose {
   const hasFix = t.lat !== 0 || t.lng !== 0;
   const jumped = hasFix && Math.abs(t.lat - prev.lat) + Math.abs(t.lng - prev.lng) > SNAP_DEGREES;
   const follow = (from: number, to: number) => (jumped ? to : lerp(from, to));
   const lat = hasFix ? follow(prev.lat, t.lat) : prev.lat;
   const lng = hasFix ? follow(prev.lng, t.lng) : prev.lng;
   const target = altitude(lng, lat, t);
-  const aim = cameraAim(t);
+  const aimed = aim(t);
   return {
     lat,
     lng,
@@ -105,8 +109,8 @@ export function smoothPose(prev: Pose, t: Telemetry, altitude: Altitude): Pose {
     roll: lerp(prev.roll, t.roll),
     pitch: lerp(prev.pitch, t.pitch),
     yaw: prev.yaw + wrapAngle(t.yaw - prev.yaw) * LERP,
-    aimHeading: prev.aimHeading + wrapAngle(aim.heading - prev.aimHeading) * LERP,
-    aimPitch: lerp(prev.aimPitch, aim.pitch),
+    aimHeading: prev.aimHeading + wrapAngle(aimed.heading - prev.aimHeading) * LERP,
+    aimPitch: lerp(prev.aimPitch, aimed.pitch),
   };
 }
 
