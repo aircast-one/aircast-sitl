@@ -34,6 +34,7 @@ export interface Car {
 }
 
 export interface Gimbal {
+  roll: number;
   pitch: number;
   yaw: number;
   earthYaw: boolean;
@@ -127,7 +128,12 @@ const applyMessage = (prev: Telemetry, msg: MavlinkMessage): Telemetry => {
         ...prev,
         gimbals: {
           ...prev.gimbals,
-          [msg.device as number]: { pitch: msg.pitch as number, yaw: msg.yaw as number, earthYaw: msg.earth_yaw as boolean },
+          [msg.device as number]: {
+            roll: msg.roll as number,
+            pitch: msg.pitch as number,
+            yaw: msg.yaw as number,
+            earthYaw: msg.earth_yaw as boolean,
+          },
         },
       };
     case "CAR":

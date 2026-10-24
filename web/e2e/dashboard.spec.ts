@@ -159,7 +159,7 @@ test.describe("Dashboard Page", () => {
       await expect(presets).toHaveCount(4);
       for (const preset of await presets.all()) await preset.click();
       await panel.getByRole("button", { name: "Apply" }).click();
-      await expect(panel.getByText("Restarted with 14 parameters.")).toBeVisible({ timeout: 45_000 });
+      await expect(panel.getByText("Restarted with 13 parameters.")).toBeVisible({ timeout: 45_000 });
       expect(await readParam("SERVO13_FUNCTION")).toBe(7);
       expect(await readParam("SIM_WIND_DIR")).toBe(270);
       expect(await readParam("SIM_BATT_VOLTAGE")).toBeCloseTo(10.4, 5);

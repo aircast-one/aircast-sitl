@@ -11,7 +11,10 @@ import { publishWhip } from "@/lib/whip.ts";
 const FRAME_RATE = 30;
 const SUPERSAMPLE = 1.5;
 const BOX_REPORT_MS = 100;
-const CAMERA_NAMES: Readonly<Record<number, string>> = { 1: "FPV camera", 2: "Payload camera" };
+const CAMERAS: Readonly<Record<number, { name: string; holdsRoll: boolean }>> = {
+  1: { name: "FPV camera", holdsRoll: false },
+  2: { name: "Payload camera", holdsRoll: true },
+};
 
 const solarNoon = (lng: number) =>
   JulianDate.addHours(
@@ -40,6 +43,7 @@ export function CameraPage() {
   const [params] = useSearchParams();
   const photorealistic = params.get("look") !== "satellite";
   const gimbal = Number(params.get("gimbal") ?? FPV_GIMBAL);
+  const camera = CAMERAS[gimbal] ?? { name: `Gimbal ${gimbal} camera`, holdsRoll: true };
   const { viewerRef } = useCesiumViewer(containerRef, { photorealistic });
   const telemetryRef = useRef(telemetry);
   useEffect(() => {
@@ -61,14 +65,14 @@ export function CameraPage() {
       photorealistic ? tilesHeight(viewer, [car.entity]) : terrainHeight(createWorldTerrainAsync()),
     );
 
-    const aim = gimbalAim(gimbal);
+    const aim = gimbalAim(gimbal, camera.holdsRoll);
     const stopReporting = gimbal === FPV_GIMBAL ? reportCarBox(car) : () => undefined;
 
     const removeListener = viewer.scene.preRender.addEventListener(() => {
       pose.current = smoothPose(pose.current, telemetryRef.current, altitude, aim);
       viewer.camera.setView({
         destination: Cartesian3.fromDegrees(pose.current.lng, pose.current.lat, pose.current.alt),
-        orientation: { heading: pose.current.aimHeading, pitch: pose.current.aimPitch, roll: 0 },
+        orientation: { heading: pose.current.aimHeading, pitch: pose.current.aimPitch, roll: pose.current.aimRoll },
       });
       car.drive(telemetryRef.current.car);
     });
@@ -76,7 +80,7 @@ export function CameraPage() {
       removeListener();
       stopReporting();
     };
-  }, [viewerRef, photorealistic, gimbal]);
+  }, [viewerRef, photorealistic, gimbal, camera.holdsRoll]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
@@ -90,7 +94,7 @@ export function CameraPage() {
     };
   }, [viewerRef, whipUrl]);
 
-  const name = CAMERA_NAMES[gimbal] ?? `Gimbal ${gimbal} camera`;
+  const { name } = camera;
   return (
     <>
       <title>{`${name} · Aircast SITL`}</title>

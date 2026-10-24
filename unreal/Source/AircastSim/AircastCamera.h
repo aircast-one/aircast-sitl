@@ -41,6 +41,8 @@ private:
 	{
 		FVector2D LongitudeLatitude = FVector2D::ZeroVector;
 		double RelativeAlt = 0.0;
+		double Roll = 0.0;
+		double Pitch = 0.0;
 		double Yaw = 0.0;
 		TOptional<FVector2D> Home;
 		TOptional<FGimbal> Gimbal;
@@ -84,6 +86,7 @@ private:
 	FVector Pose;
 	double Heading = 0.0;
 	double Pitch = 0.0;
+	double Roll = 0.0;
 	FVector CarPose = FVector::ZeroVector;
 	double CarHeading = 0.0;
 	FGroundSample HomeGround;

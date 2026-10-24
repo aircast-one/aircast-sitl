@@ -169,6 +169,8 @@ void AAircastCamera::Receive(const FString& Message)
 	const FString Type = Json->GetStringField(TEXT("type"));
 	if (Type == TEXT("ATTITUDE"))
 	{
+		Latest.Roll = Json->GetNumberField(TEXT("roll"));
+		Latest.Pitch = Json->GetNumberField(TEXT("pitch"));
 		Latest.Yaw = Json->GetNumberField(TEXT("yaw"));
 	}
 	else if (Type == TEXT("GLOBAL_POSITION_INT"))
@@ -237,13 +239,15 @@ void AAircastCamera::Tick(float DeltaSeconds)
 
 	Pose = FVector(LongitudeLatitude.X, LongitudeLatitude.Y, Height);
 	const TOptional<FGimbal>& Gimbal = Latest.Gimbal;
-	const double AimHeading = !Gimbal ? Latest.Yaw : Gimbal->bEarthYaw ? Gimbal->Yaw : Latest.Yaw + Gimbal->Yaw;
+	const double Pan = !Gimbal ? 0.0 : Gimbal->bEarthYaw ? Gimbal->Yaw - Latest.Yaw : Gimbal->Yaw;
 	const double AimPitch = Gimbal ? Gimbal->Pitch : FMath::DegreesToRadians(GimbalTiltDegrees);
-	Heading += FMath::FindDeltaAngleRadians(Heading, AimHeading) * Alpha;
+	const double AimRoll = Latest.Roll * FMath::Cos(Pan) + Latest.Pitch * FMath::Sin(Pan);
+	Heading += FMath::FindDeltaAngleRadians(Heading, Latest.Yaw + Pan) * Alpha;
 	Pitch = FMath::Lerp(Pitch, AimPitch, Alpha);
+	Roll = FMath::Lerp(Roll, AimRoll, Alpha);
 	GlobeAnchor->MoveToLongitudeLatitudeHeight(Pose);
 	GlobeAnchor->SetEastSouthUpRotation(
-		FRotator(FMath::RadiansToDegrees(Pitch), FMath::RadiansToDegrees(Heading) - 90.0, 0.0).Quaternion());
+		FRotator(FMath::RadiansToDegrees(Pitch), FMath::RadiansToDegrees(Heading) - 90.0, FMath::RadiansToDegrees(Roll)).Quaternion());
 	DriveCar(Alpha);
 	Stream();
 }

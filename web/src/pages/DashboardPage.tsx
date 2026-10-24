@@ -80,8 +80,8 @@ const presets: readonly Preset[] = [
   },
   {
     label: "4 drop bays",
-    note: "Outputs 9–12 free for a servo per bay, gimbal moved to 13–15",
-    params: { SERVO9_FUNCTION: 0, SERVO10_FUNCTION: 0, SERVO11_FUNCTION: 0, SERVO13_FUNCTION: 7, SERVO14_FUNCTION: 6, SERVO15_FUNCTION: 8 },
+    note: "Outputs 9–12 free for a servo per bay, gimbal moved to 13–14",
+    params: { SERVO9_FUNCTION: 0, SERVO10_FUNCTION: 0, SERVO11_FUNCTION: 0, SERVO13_FUNCTION: 7, SERVO14_FUNCTION: 6 },
   },
   { label: "Wind", note: "Wind 7 m/s from the west", params: { SIM_WIND_SPD: 7, SIM_WIND_DIR: 270 } },
   { label: "Low battery", note: "Battery under its low-voltage limit, so arming is refused", params: { SIM_BATT_VOLTAGE: 10.4, BATT_LOW_VOLT: 10.5 } },

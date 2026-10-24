@@ -10,6 +10,7 @@ export interface Pose {
   yaw: number;
   aimHeading: number;
   aimPitch: number;
+  aimRoll: number;
 }
 
 const FIXED_TILT = CesiumMath.toRadians(-15);
@@ -23,6 +24,7 @@ export const HOME_POSE: Pose = {
   yaw: 0,
   aimHeading: 0,
   aimPitch: FIXED_TILT,
+  aimRoll: 0,
 };
 
 const LERP = 0.1;
@@ -85,19 +87,23 @@ export function homeAltitude(heightAt: HeightAt): Altitude {
   };
 }
 
-export type Aim = (t: Telemetry) => { heading: number; pitch: number };
+export type Aim = (t: Telemetry) => { heading: number; pitch: number; roll: number };
 
 export const FPV_GIMBAL = 1;
 
 export const gimbalAim =
-  (device: number): Aim =>
+  (device: number, holdsRoll: boolean): Aim =>
   (t) => {
     const gimbal = t.gimbals[device];
-    if (!gimbal) return { heading: t.yaw, pitch: FIXED_TILT };
-    return { heading: gimbal.earthYaw ? gimbal.yaw : t.yaw + gimbal.yaw, pitch: gimbal.pitch };
+    const pan = !gimbal ? 0 : gimbal.earthYaw ? gimbal.yaw - t.yaw : gimbal.yaw;
+    return {
+      heading: t.yaw + pan,
+      pitch: gimbal?.pitch ?? FIXED_TILT,
+      roll: holdsRoll ? (gimbal?.roll ?? 0) : t.roll * Math.cos(pan) + t.pitch * Math.sin(pan),
+    };
   };
 
-export function smoothPose(prev: Pose, t: Telemetry, altitude: Altitude, aim: Aim = gimbalAim(FPV_GIMBAL)): Pose {
+export function smoothPose(prev: Pose, t: Telemetry, altitude: Altitude, aim: Aim = gimbalAim(FPV_GIMBAL, false)): Pose {
   const hasFix = t.lat !== 0 || t.lng !== 0;
   const jumped = hasFix && Math.abs(t.lat - prev.lat) + Math.abs(t.lng - prev.lng) > SNAP_DEGREES;
   const follow = (from: number, to: number) => (jumped ? to : lerp(from, to));
@@ -114,6 +120,7 @@ export function smoothPose(prev: Pose, t: Telemetry, altitude: Altitude, aim: Ai
     yaw: prev.yaw + wrapAngle(t.yaw - prev.yaw) * LERP,
     aimHeading: prev.aimHeading + wrapAngle(aimed.heading - prev.aimHeading) * LERP,
     aimPitch: lerp(prev.aimPitch, aimed.pitch),
+    aimRoll: lerp(prev.aimRoll, aimed.roll),
   };
 }
 
