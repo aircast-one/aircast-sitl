@@ -61,6 +61,7 @@ def msg_to_json(msg, vehicle_sysid):
         w, x, y, z = msg.q
         return {
             'type': 'GIMBAL',
+            'device': msg.gimbal_device_id,
             'pitch': math.asin(max(-1.0, min(1.0, 2 * (w * y - z * x)))),
             'yaw': math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z)),
             'earth_yaw': bool(msg.flags & YAW_IN_EARTH_FRAME),

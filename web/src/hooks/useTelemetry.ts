@@ -23,7 +23,7 @@ export interface Telemetry {
   homeSet: boolean;
   homeLat: number;
   homeLng: number;
-  gimbal: Gimbal | null;
+  gimbals: Readonly<Record<number, Gimbal>>;
   car: Car | null;
 }
 
@@ -62,7 +62,7 @@ const initialTelemetry: Telemetry = {
   homeSet: false,
   homeLat: 0,
   homeLng: 0,
-  gimbal: null,
+  gimbals: {},
   car: null,
 };
 
@@ -123,7 +123,13 @@ const applyMessage = (prev: Telemetry, msg: MavlinkMessage): Telemetry => {
         climb: msg.climb as number,
       };
     case "GIMBAL":
-      return { ...prev, gimbal: { pitch: msg.pitch as number, yaw: msg.yaw as number, earthYaw: msg.earth_yaw as boolean } };
+      return {
+        ...prev,
+        gimbals: {
+          ...prev.gimbals,
+          [msg.device as number]: { pitch: msg.pitch as number, yaw: msg.yaw as number, earthYaw: msg.earth_yaw as boolean },
+        },
+      };
     case "CAR":
       return { ...prev, car: { lat: msg.lat as number, lng: msg.lng as number, heading: ((msg.hdg as number) * Math.PI) / 180 } };
     case "HEARTBEAT":

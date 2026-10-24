@@ -83,7 +83,7 @@ run:
         -p {{web_port}} \
         {{full_image}}
 
-# Render the SITL's cameras at `host` and serve them as rtsp://<this mac>:8554/sim (2-axis FPV gimbal) and /shoot (fixed, payload-drop aim). look: photoreal | satellite | unreal (unreal renders /sim only)
+# Render the SITL's cameras at `host` and serve them as rtsp://<this mac>:8554/sim (FPV gimbal) and /shoot (payload gimbal). look: photoreal | satellite | unreal (unreal renders /sim only)
 [group('run')]
 camera host=sitl_host look="photoreal":
     #!/usr/bin/env bash
@@ -115,7 +115,7 @@ camera host=sitl_host look="photoreal":
         "{{chrome}}" --headless --user-data-dir="$profile2" --window-size=1280,720 \
             --disable-features=WebRtcHideLocalIpsWithMdns \
             --disable-background-timer-throttling --disable-renderer-backgrounding \
-            "http://localhost:{{camera_port}}/camera?look={{look}}&aim=fixed&whip=http://localhost:8899/shoot/whip" 2>/dev/null &
+            "http://localhost:{{camera_port}}/camera?look={{look}}&gimbal=2&whip=http://localhost:8899/shoot/whip" 2>/dev/null &
     fi
     echo "Vehicle: TCP {{host}}:5760"
     echo "Camera (FPV gimbal):   rtsp://$(ipconfig getifaddr en0):8554/sim"

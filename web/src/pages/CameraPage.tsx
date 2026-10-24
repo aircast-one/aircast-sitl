@@ -4,7 +4,7 @@ import { Cartesian3, JulianDate, createWorldTerrainAsync } from "cesium";
 import { bridgeUrl, useTelemetry } from "@/hooks/useTelemetry.ts";
 import { useCesiumViewer } from "@/hooks/useCesiumViewer.ts";
 import { addCar } from "@/lib/car.ts";
-import { boresightAim, cameraAim, HOME_POSE, homeAltitude, smoothPose, terrainHeight, tilesHeight } from "@/lib/pose.ts";
+import { FPV_GIMBAL, gimbalAim, HOME_POSE, homeAltitude, smoothPose, terrainHeight, tilesHeight } from "@/lib/pose.ts";
 import { publishWhip } from "@/lib/whip.ts";
 
 const FRAME_RATE = 30;
@@ -18,12 +18,26 @@ const solarNoon = (lng: number) =>
     new JulianDate(),
   );
 
+function reportCarBox(car: ReturnType<typeof addCar>) {
+  const bridge = { current: new WebSocket(bridgeUrl()) };
+  const reporting = setInterval(() => {
+    if (bridge.current.readyState === WebSocket.CLOSED) bridge.current = new WebSocket(bridgeUrl());
+    if (bridge.current.readyState === WebSocket.OPEN) {
+      bridge.current.send(JSON.stringify({ type: "CAR_BOX", box: car.box() }));
+    }
+  }, BOX_REPORT_MS);
+  return () => {
+    clearInterval(reporting);
+    bridge.current.close();
+  };
+}
+
 export function CameraPage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const telemetry = useTelemetry();
   const [params] = useSearchParams();
   const photorealistic = params.get("look") !== "satellite";
-  const aim = params.get("aim") === "fixed" ? boresightAim : cameraAim;
+  const gimbal = Number(params.get("gimbal") ?? FPV_GIMBAL);
   const { viewerRef } = useCesiumViewer(containerRef, { photorealistic });
   const telemetryRef = useRef(telemetry);
   useEffect(() => {
@@ -45,13 +59,8 @@ export function CameraPage() {
       photorealistic ? tilesHeight(viewer, [car.entity]) : terrainHeight(createWorldTerrainAsync()),
     );
 
-    const bridge = { current: new WebSocket(bridgeUrl()) };
-    const reporting = setInterval(() => {
-      if (bridge.current.readyState === WebSocket.CLOSED) bridge.current = new WebSocket(bridgeUrl());
-      if (bridge.current.readyState === WebSocket.OPEN) {
-        bridge.current.send(JSON.stringify({ type: "CAR_BOX", box: car.box() }));
-      }
-    }, BOX_REPORT_MS);
+    const aim = gimbalAim(gimbal);
+    const stopReporting = gimbal === FPV_GIMBAL ? reportCarBox(car) : () => undefined;
 
     const removeListener = viewer.scene.preRender.addEventListener(() => {
       pose.current = smoothPose(pose.current, telemetryRef.current, altitude, aim);
@@ -63,10 +72,9 @@ export function CameraPage() {
     });
     return () => {
       removeListener();
-      clearInterval(reporting);
-      bridge.current.close();
+      stopReporting();
     };
-  }, [viewerRef, photorealistic, aim]);
+  }, [viewerRef, photorealistic, gimbal]);
 
   useEffect(() => {
     const viewer = viewerRef.current;

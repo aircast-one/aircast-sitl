@@ -30,6 +30,7 @@ namespace
 	constexpr int64 GooglePhotorealisticAsset = 2275207;
 	const FVector HomePose(149.1652373, -35.363262, 590.0);
 	constexpr double GimbalTiltDegrees = -15.0;
+	constexpr int32 FpvGimbal = 1;
 	constexpr double SnapDegrees = 0.01;
 	constexpr double GroundClearance = 0.5;
 	constexpr double LerpPerFrameAt60 = 0.1;
@@ -179,7 +180,7 @@ void AAircastCamera::Receive(const FString& Message)
 			Latest.Home = Latest.LongitudeLatitude;
 		}
 	}
-	else if (Type == TEXT("GIMBAL"))
+	else if (Type == TEXT("GIMBAL") && Json->GetIntegerField(TEXT("device")) == FpvGimbal)
 	{
 		Latest.Gimbal = FGimbal{Json->GetNumberField(TEXT("pitch")), Json->GetNumberField(TEXT("yaw")), Json->GetBoolField(TEXT("earth_yaw"))};
 	}

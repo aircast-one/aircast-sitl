@@ -198,8 +198,6 @@ async def run(host, port, car_box):
                 conn.mav.heartbeat_send(MAV.MAV_TYPE_CAMERA, MAV.MAV_AUTOPILOT_INVALID, 0, 0, MAV.MAV_STATE_ACTIVE)
                 state['beat_at'] = now
             if not cam['tracking']:
-                # no visual tracking, but a steady zero-rate hold keeps the mount in
-                # MAVLINK_TARGETING so ArduPilot's servo-mount stabilization stays engaged
                 if cam['gimbal_device'] and now - state['steered_at'] >= STEER_S:
                     send_rates(conn, cam, 0.0, 0.0)
                     state['steered_at'] = now

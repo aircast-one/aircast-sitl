@@ -87,14 +87,17 @@ export function homeAltitude(heightAt: HeightAt): Altitude {
 
 export type Aim = (t: Telemetry) => { heading: number; pitch: number };
 
-export const cameraAim: Aim = (t) => {
-  if (!t.gimbal) return { heading: t.yaw, pitch: FIXED_TILT };
-  return { heading: t.gimbal.earthYaw ? t.gimbal.yaw : t.yaw + t.gimbal.yaw, pitch: t.gimbal.pitch };
-};
+export const FPV_GIMBAL = 1;
 
-export const boresightAim: Aim = (t) => ({ heading: t.yaw, pitch: t.pitch });
+export const gimbalAim =
+  (device: number): Aim =>
+  (t) => {
+    const gimbal = t.gimbals[device];
+    if (!gimbal) return { heading: t.yaw, pitch: FIXED_TILT };
+    return { heading: gimbal.earthYaw ? gimbal.yaw : t.yaw + gimbal.yaw, pitch: gimbal.pitch };
+  };
 
-export function smoothPose(prev: Pose, t: Telemetry, altitude: Altitude, aim: Aim = cameraAim): Pose {
+export function smoothPose(prev: Pose, t: Telemetry, altitude: Altitude, aim: Aim = gimbalAim(FPV_GIMBAL)): Pose {
   const hasFix = t.lat !== 0 || t.lng !== 0;
   const jumped = hasFix && Math.abs(t.lat - prev.lat) + Math.abs(t.lng - prev.lng) > SNAP_DEGREES;
   const follow = (from: number, to: number) => (jumped ? to : lerp(from, to));
