@@ -1,7 +1,3 @@
-# aircast-sitl task runner. Run `just` to list recipes.
-#
-# Docker-based ArduPilot SITL simulator for ARM64 and AMD64 platforms.
-
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 
 image_name     := "ghcr.io/pavliha/aircast-sitl"
@@ -15,7 +11,7 @@ fg_port   := "9005:9005"
 web_port  := "8888:8888"
 
 sitl_host      := "sitl.aircast.one"
-mediamtx_image := "bluenviron/mediamtx:1.20.1"
+mediamtx_image := "bluenviron/mediamtx:1.21.2"
 chrome         := "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 unreal_root    := "/Users/Shared/Epic Games/UE_5.8"
 tailscale      := "/Applications/Tailscale.app/Contents/MacOS/Tailscale"

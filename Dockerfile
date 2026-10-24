@@ -1,6 +1,6 @@
-# syntax=docker/dockerfile:1.3
+# syntax=docker/dockerfile:1.28
 
-FROM ubuntu:22.04 AS builder
+FROM ubuntu:26.04 AS builder
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG AP_TAG=Copter-4.5
@@ -9,7 +9,7 @@ RUN --mount=type=cache,target=/var/cache/apt \
     apt-get update \
  && apt-get install -y --no-install-recommends \
       git \
-      python3 python3-dev python3-pip \
+      python3 python3-dev python3-pip python3-setuptools \
       build-essential \
       ccache \
       gcc-arm-none-eabi \
@@ -28,8 +28,7 @@ RUN git clone \
  && git submodule update --init --recursive --depth 1
 
 RUN --mount=type=cache,target=/root/.cache/pip \
-    python3 -m pip install --upgrade pip \
- && python3 -m pip install --no-cache-dir \
+    python3 -m pip install --break-system-packages --no-cache-dir \
       empy==3.3.4 \
       pexpect \
       future \
@@ -60,7 +59,7 @@ RUN --mount=type=cache,id=ccache,target=/root/.ccache \
 FROM scratch AS cuav-x7-sim
 COPY --from=cuav-x7-sim-build /src/build/CUAV-X7-SimOnHardWare/bin/arducopter.apj /
 
-FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend
+FROM --platform=$BUILDPLATFORM node:26-alpine AS frontend
 
 ARG VITE_CESIUM_ION_TOKEN=""
 ENV VITE_CESIUM_ION_TOKEN=$VITE_CESIUM_ION_TOKEN
@@ -71,7 +70,7 @@ RUN npm ci
 COPY web/ ./
 RUN npm run build
 
-FROM ubuntu:22.04
+FROM ubuntu:26.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -101,7 +100,7 @@ RUN apt-get update \
  && apt-get autoremove -y \
  && rm -rf /var/lib/apt/lists/*
 
-RUN python3 -m pip install --no-cache-dir \
+RUN python3 -m pip install --break-system-packages --no-cache-dir \
       pymavlink \
       pyserial \
       websockets

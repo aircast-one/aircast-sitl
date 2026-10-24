@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=84"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -16,8 +16,8 @@ include = ["aircast_sim*"]
 
 [project.optional-dependencies]
 dev = [
-    "ruff>=0.4",
-    "mypy>=1.10",
+    "ruff>=0.17",
+    "mypy>=2.4",
 ]
 
 [tool.ruff]
@@ -26,9 +26,6 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
-# E501 (line too long) is handled by ruff format; B008 (function call in
-# default arg) trips on argparse default factories used by Click/typer
-# elsewhere — not strictly needed here, but reserve the override.
 ignore = ["E501"]
 
 [tool.ruff.format]
@@ -38,7 +35,5 @@ quote-style = "double"
 python_version = "3.11"
 warn_unused_ignores = true
 warn_redundant_casts = true
-# python-dbusmock and dbus have no published stubs; without
-# ignore_missing_imports mypy errors on every import.
 ignore_missing_imports = true
 strict_equality = true

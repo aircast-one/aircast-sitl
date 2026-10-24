@@ -1,18 +1,6 @@
-# syntax=docker/dockerfile:1.6
-# ---
-# aircast D-Bus simulator (Phase 1: skeleton)
-# Boots a private dbus-daemon, loads python-dbusmock's NetworkManager and
-# ModemManager1 templates, and applies the bundled happy-wifi scenario.
-# ---
+# syntax=docker/dockerfile:1.28
 FROM debian:trixie-slim AS runtime
 
-# - Packages: dbus + python3-dbus + python3-dbusmock + tini + bash.
-# - Drop bundled NM/MM .service files so dbus-daemon can't auto-activate
-#   the real binaries (we replace both with mocks).
-# - Create uid-1000 `aircast` user. It owns /run/dbus and /var/lib/dbus,
-#   matches the agent container's default uid (EXTERNAL auth pairs the
-#   peer-uid against /etc/passwd), and is what dbus-daemon drops to
-#   after binding the socket (see conf/aircast-sim-bus.conf).
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
         bash \
@@ -28,10 +16,6 @@ RUN apt-get update \
  && useradd -u 1000 -m -s /bin/bash aircast \
  && chown -R aircast:aircast /run/dbus /var/lib/dbus
 
-# We do not pip-install our package. Trixie's python3 is PEP-668 externally
-# managed; rather than carry a venv just for one in-tree module, we drop the
-# package onto PYTHONPATH. The package has no third-party runtime imports
-# beyond what apt already provided (dbusmock, dbus).
 ENV PYTHONPATH=/opt
 ENV PYTHONUNBUFFERED=1
 
@@ -51,16 +35,6 @@ USER aircast
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/entrypoint.sh"]
 
-# ---
-# Dev tooling image (for `make lint`, `make typecheck`, `make format`).
-# Built with `docker build --target dev-tools -t aircast-sim:dev-tools .`
-# Adds ruff + mypy via pip; the runtime image stays minimal.
-#
-# Why pip (not apt): trixie ships mypy but not ruff (verified at build
-# time: `E: Unable to locate package ruff`). Rather than mix sources,
-# both come from PyPI. --break-system-packages bypasses PEP-668 — fine
-# here because this stage exists solely to host the linter binaries.
-# ---
 FROM runtime AS dev-tools
 USER root
 RUN apt-get update \
@@ -68,6 +42,6 @@ RUN apt-get update \
         python3-pip \
  && rm -rf /var/lib/apt/lists/* \
  && pip3 install --break-system-packages --no-cache-dir \
-        "ruff>=0.4" \
-        "mypy>=1.10"
+        "ruff>=0.17" \
+        "mypy>=2.4"
 ENTRYPOINT []
