@@ -140,6 +140,7 @@ export function FpvPage() {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-black">
+      <title>3D view · Aircast SITL</title>
       <div ref={containerRef} className="w-full h-full" />
 
       <div className="fixed top-4 left-1/2 -translate-x-1/2 z-20 flex gap-2">

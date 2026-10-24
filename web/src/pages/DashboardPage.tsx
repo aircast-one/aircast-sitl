@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Cartographic, EllipsoidGeodesic } from "cesium";
-import { ArrowUpRight, Check, Copy, LoaderCircle, MapPin, Plus, RotateCcw, SlidersHorizontal } from "lucide-react";
+import { ArrowRight, Check, Copy, LoaderCircle, MapPin, Plus, RotateCcw, SlidersHorizontal } from "lucide-react";
 import { useTelemetry, type Telemetry } from "@/hooks/useTelemetry.ts";
 import { AirframeIcon, type AirframeId } from "@/components/Airframe.tsx";
 import { Attitude } from "@/components/Attitude.tsx";
@@ -79,7 +79,7 @@ const presets: readonly Preset[] = [
     params: { GRIP_ENABLE: 1, GRIP_TYPE: 1, SERVO12_FUNCTION: 28, GRIP_AUTOCLOSE: 2 },
   },
   {
-    label: "4 bays on 9–12",
+    label: "4 drop bays",
     note: "Outputs 9–12 free for a servo per bay, gimbal moved to 13–15",
     params: { SERVO9_FUNCTION: 0, SERVO10_FUNCTION: 0, SERVO11_FUNCTION: 0, SERVO13_FUNCTION: 7, SERVO14_FUNCTION: 6, SERVO15_FUNCTION: 8 },
   },
@@ -543,7 +543,7 @@ function TelemetryPanel({ telemetry, live }: { telemetry: Telemetry; live: boole
       label="Telemetry"
       action={
         <Link to="/fpv" className="-mr-1 flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground">
-          3D view <ArrowUpRight className="size-3.5" />
+          3D view <ArrowRight className="size-3.5" />
         </Link>
       }
     >
@@ -690,8 +690,9 @@ function CarPanel({
 
 function ViewsPanel() {
   const views = [
-    { to: "/fpv", title: "3D FPV view", text: "CesiumJS terrain with the live aircraft and HUD" },
-    { to: "/camera", title: "Onboard camera", text: "Rendered gimbal camera for RTSP and WHIP" },
+    { to: "/fpv", title: "3D view", text: "CesiumJS terrain with the live aircraft and HUD" },
+    { to: "/camera", title: "FPV camera", text: "What the tracking gimbal streams" },
+    { to: "/camera?gimbal=2", title: "Payload camera", text: "What the payload gimbal streams" },
   ];
   return (
     <Panel label="Views">
@@ -703,7 +704,7 @@ function ViewsPanel() {
                 <p className="text-[13px] font-medium">{view.title}</p>
                 <p className="truncate text-xs text-muted-foreground">{view.text}</p>
               </div>
-              <ArrowUpRight className="size-4 text-muted-foreground transition-colors group-hover:text-foreground" />
+              <ArrowRight className="size-4 text-muted-foreground transition-colors group-hover:text-foreground" />
             </Link>
           </li>
         ))}

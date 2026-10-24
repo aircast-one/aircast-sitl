@@ -6,7 +6,9 @@ import {
   Color,
   ConstantPositionProperty,
   Entity,
+  type GeocoderService,
   Ion,
+  IonGeocoderService,
   Math as CesiumMath,
   Rectangle,
   SceneMode,
@@ -38,6 +40,18 @@ const viewRectangle = (viewer: Viewer) => {
   return corners.every((corner) => corner !== undefined) ? Rectangle.fromCartesianArray(corners as Cartesian3[]) : undefined;
 };
 
+const coordinatesOf = (destination: Rectangle | Cartesian3) => {
+  const at = destination instanceof Rectangle ? Rectangle.center(destination) : Cartographic.fromCartesian(destination);
+  return `${CesiumMath.toDegrees(at.latitude).toFixed(2)}, ${CesiumMath.toDegrees(at.longitude).toFixed(2)}`;
+};
+
+const distinguished = (results: readonly GeocoderService.Result[]) =>
+  results.map((result) =>
+    results.filter((other) => other.displayName === result.displayName).length > 1
+      ? { ...result, displayName: `${result.displayName} · ${coordinatesOf(result.destination)}` }
+      : result,
+  );
+
 export function LocationMap({ home, pick, onPick }: { home: LatLng | null; pick: LatLng | null; onPick: (at: LatLng) => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
@@ -52,6 +66,7 @@ export function LocationMap({ home, pick, onPick }: { home: LatLng | null; pick:
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+    const ion: { places?: IonGeocoderService } = {};
     const viewer = new Viewer(container, {
       sceneMode: SceneMode.SCENE2D,
       mapProjection: new WebMercatorProjection(),
@@ -59,7 +74,14 @@ export function LocationMap({ home, pick, onPick }: { home: LatLng | null; pick:
       animation: false,
       baseLayerPicker: false,
       fullscreenButton: false,
-      geocoder: Ion.defaultAccessToken !== "",
+      geocoder: Ion.defaultAccessToken !== "" && [
+        {
+          get credit() {
+            return ion.places?.credit;
+          },
+          geocode: async (query, type) => distinguished((await ion.places?.geocode(query, type)) ?? []),
+        },
+      ],
       homeButton: false,
       infoBox: false,
       sceneModePicker: false,
@@ -69,6 +91,7 @@ export function LocationMap({ home, pick, onPick }: { home: LatLng | null; pick:
       requestRenderMode: true,
       creditContainer: document.createElement("div"),
     });
+    ion.places = new IonGeocoderService({ scene: viewer.scene });
     viewer.imageryLayers.addImageryProvider(SATELLITE_PROVIDER);
     viewer.entities.add(markersRef.current.home);
     viewer.entities.add(markersRef.current.pick);

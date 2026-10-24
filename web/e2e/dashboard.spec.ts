@@ -51,7 +51,7 @@ test.describe("Dashboard Page", () => {
 
   test("the 3D view link opens the FPV page", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("link", { name: "3D view" }).click();
+    await page.getByRole("link", { name: "3D view", exact: true }).click();
     await expect(page).toHaveURL(/\/fpv/);
     await expect(page.locator("canvas")).toBeVisible();
   });
@@ -104,6 +104,16 @@ test.describe("Dashboard Page", () => {
   test("the location API rejects coordinates off the globe", async ({ request }) => {
     const res = await request.post("/api/home", { data: { lat: 91, lng: 0 } });
     expect(res.status()).toBe(400);
+  });
+
+  test("place search tells apart places that share a name", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("searchbox", { name: "Enter an address or landmark..." }).fill("canbera");
+    const suggestions = page.locator(".search-results li");
+    await expect(suggestions.first()).toBeVisible({ timeout: 10_000 });
+    const labels = await suggestions.allTextContents();
+    expect(labels.length).toBeGreaterThan(1);
+    expect(new Set(labels).size).toBe(labels.length);
   });
 
   test.describe("Parameters", () => {

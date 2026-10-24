@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Cartesian3, JulianDate, createWorldTerrainAsync } from "cesium";
 import { bridgeUrl, useTelemetry } from "@/hooks/useTelemetry.ts";
 import { useCesiumViewer } from "@/hooks/useCesiumViewer.ts";
+import { Button } from "@/components/ui/button.tsx";
 import { addCar } from "@/lib/car.ts";
 import { FPV_GIMBAL, gimbalAim, HOME_POSE, homeAltitude, smoothPose, terrainHeight, tilesHeight } from "@/lib/pose.ts";
 import { publishWhip } from "@/lib/whip.ts";
@@ -10,6 +11,7 @@ import { publishWhip } from "@/lib/whip.ts";
 const FRAME_RATE = 30;
 const SUPERSAMPLE = 1.5;
 const BOX_REPORT_MS = 100;
+const CAMERA_NAMES: Readonly<Record<number, string>> = { 1: "FPV camera", 2: "Payload camera" };
 
 const solarNoon = (lng: number) =>
   JulianDate.addHours(
@@ -88,5 +90,19 @@ export function CameraPage() {
     };
   }, [viewerRef, whipUrl]);
 
-  return <div ref={containerRef} className="w-[1280px] h-[720px] overflow-hidden bg-black" />;
+  const name = CAMERA_NAMES[gimbal] ?? `Gimbal ${gimbal} camera`;
+  return (
+    <>
+      <title>{`${name} · Aircast SITL`}</title>
+      <div ref={containerRef} className="w-[1280px] h-[720px] overflow-hidden bg-black" />
+      <div className="fixed top-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2">
+        <Button variant="outline" size="sm" className="bg-background/60 font-mono text-xs" asChild>
+          <Link to="/">SITL Dashboard</Link>
+        </Button>
+        <p className="rounded-md bg-background/60 px-2.5 py-1.5 font-mono text-xs">
+          {name} <span className="text-muted-foreground">· the frame streamed over RTSP and WHIP</span>
+        </p>
+      </div>
+    </>
+  );
 }

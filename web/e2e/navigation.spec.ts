@@ -5,7 +5,7 @@ test.describe("Navigation", () => {
     await page.goto("/");
     await expect(page.getByRole("status")).toHaveText("Live", { timeout: 15_000 });
 
-    await page.getByRole("link", { name: /3D FPV view/ }).click();
+    await page.getByRole("complementary").getByRole("link", { name: /^3D view/ }).click();
     await expect(page).toHaveURL(/\/fpv/);
     await expect(page.locator("canvas")).toBeVisible();
     await expect(page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 15_000 });
