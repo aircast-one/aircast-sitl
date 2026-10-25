@@ -33,7 +33,7 @@ export interface Car {
   heading: number;
 }
 
-export interface Gimbal {
+interface Gimbal {
   roll: number;
   pitch: number;
   yaw: number;
