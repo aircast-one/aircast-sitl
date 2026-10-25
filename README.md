@@ -220,20 +220,27 @@ hovering at 16% throttle with no motor slew limit, so it feels like a racer rath
 drone. [`src/airframe.parm`](src/airframe.parm) holds its ArduCopter AutoTune gains; never load it on a
 real drone. 4.7 shapes attitude commands with a jerk limit, so it also sets `ATC_INPUT_TC` 0.05 (the
 default 0.15 halved the lean reached 0.2 s after a stick step) and `ATC_ACC_Y_MAX` 36000, which leaves
-yaw acceleration effectively unlimited as `0` did on 4.5 (4.7 reads `0` as 1800°/s²).
+yaw acceleration effectively unlimited as `0` did on 4.5 (4.7 reads `0` as 1800°/s²). It also turns off
+the 5 Hz yaw error filter AutoTune picked (`ATC_RAT_YAW_FLTE` 0): 4.7 ramps a yaw command where 4.5
+stepped it, and with the filter the motors reached full yaw 40 ms after the stick instead of 20 ms.
 
 Against the stock 3 kg SITL quad, a half-stick Acro roll reaches 90% of its rate in 60–110 ms instead
 of ~200 ms, and full throttle climbs at 35–38 m/s² instead of 10.5 m/s². Yaw is about the same,
-200–230 ms, limited by the frame's yaw authority.
+limited by the frame's yaw authority: in a full yaw two motors sit on their idle floor.
+
+On 4.7 a full yaw reaches 63% of its rate in 222 ms with 25% overshoot, against 202 ms and 68% on 4.5.
+The gap is the simulator, not the tuning: 4.7's motor model turns the props' momentum drag into
+torque, so the same full yaw output spins the racer up at 530°/s² from rest but only 370°/s² at
+150°/s. With that drag switched off, 4.7 reaches 63% in 202 ms with 35% overshoot.
 
 Measured in Loiter, from a stick step to the response:
 
 | Stick | Response |
 |---|---|
-| Forward, half | 19° lean at 0.2 s, 2.6 m/s at 1 s, 3.6 m/s at 3 s |
-| Forward, full | 1 m/s at 0.22 s, 6.8 m/s at 1 s, 9.3 m/s at 3 s |
-| Released at full speed | stopped in 1.2 s |
-| Yaw, full | turning within 60–85 ms, 90% of full rate at 0.36 s |
+| Forward, half | 19–20° lean at 0.2 s, 2.6 m/s at 1 s, 3.6 m/s at 3 s |
+| Forward, full | 1–1.1 m/s at 0.22 s, 6.8–6.9 m/s at 1 s, 9.3 m/s at 3 s |
+| Released at full speed (9.6 m/s) | stopped in 1.0 s |
+| Yaw, full | turning within 45–65 ms, 90% of full rate at 0.33–0.35 s, peaking 25% above it |
 | Throttle, full | 0.4 m/s climb at 0.45 s, 4 m/s at 2 s |
 
 Loiter here holds the heading while the yaw stick is centred
@@ -241,6 +248,11 @@ Loiter here holds the heading while the yaw stick is centred
 ArduCopter Loiter only holds the yaw rate, so swinging the lean around turns the nose: three full
 right-stick circles of 1–1.5 s each turned it 21–33° on stock 4.7.2 (115–180° on stock 4.5), against
 under 0.5° with the patch. A real drone flies stock Loiter until it runs a build with the same patch.
+
+4.7 Loiter also bends the flight path with the nose (`LOIT_OPTIONS` 1, coordinated turns). The patch
+keeps that for yaw-stick turns but leaves the held heading's own small corrections out of it: fed into
+the turn, they rolled the copter up to 42° and swung the nose 15° in a hard stop from full speed, which
+then took 1.2 s instead of 1.0 s.
 
 Loiter turns the stick into a lean angle, so speed builds toward its limit with a time constant of
 `LOIT_SPEED_MS` / (g · tan `LOIT_ANG_MAX`), about 1 s here. A lower top speed or a steeper lean shortens it.

@@ -14,7 +14,7 @@ index e2dca5d..e2be43e 100644
      bool _precision_loiter_enabled;
      bool _precision_loiter_active; // true if user has switched on prec loiter
 diff --git a/ArduCopter/mode_loiter.cpp b/ArduCopter/mode_loiter.cpp
-index 768f752..dd34f7b 100644
+index 768f752..075b2b0 100644
 --- a/ArduCopter/mode_loiter.cpp
 +++ b/ArduCopter/mode_loiter.cpp
 @@ -17,6 +17,7 @@ bool ModeLoiter::init(bool ignore_checks)
@@ -25,7 +25,7 @@ index 768f752..dd34f7b 100644
  
      // initialise the vertical position controller
      if (!pos_control->D_is_active()) {
-@@ -72,6 +73,22 @@ void ModeLoiter::precision_loiter_xy()
+@@ -72,6 +73,23 @@ void ModeLoiter::precision_loiter_xy()
  }
  #endif
  
@@ -38,6 +38,7 @@ index 768f752..dd34f7b 100644
 +        held_heading_rad = attitude_control->get_att_target_euler_rad().z;
 +        heading_held = true;
 +    }
++    loiter_nav->set_heading_held(heading_held);
 +    if (heading_held) {
 +        attitude_control->input_thrust_vector_heading_rad(thrust_vector, held_heading_rad, 0.0f);
 +    } else {
@@ -48,7 +49,7 @@ index 768f752..dd34f7b 100644
  // loiter_run - runs the loiter controller
  // should be called at 100hz or more
  void ModeLoiter::run()
-@@ -103,6 +120,9 @@ void ModeLoiter::run()
+@@ -103,6 +121,9 @@ void ModeLoiter::run()
  
      // Loiter State Machine Determination
      AltHoldModeState loiter_state = get_alt_hold_state_D_ms(target_climb_rate_ms);
@@ -58,7 +59,7 @@ index 768f752..dd34f7b 100644
  
      // Loiter State Machine
      switch (loiter_state) {
-@@ -176,7 +196,7 @@ void ModeLoiter::run()
+@@ -176,7 +197,7 @@ void ModeLoiter::run()
      }
  
      // call attitude controller
@@ -67,3 +68,51 @@ index 768f752..dd34f7b 100644
      // run the vertical position controller and set output throttle
      pos_control->D_update_controller();
  }
+diff --git a/libraries/AC_WPNav/AC_Loiter.cpp b/libraries/AC_WPNav/AC_Loiter.cpp
+index 4cf8411..99afc07 100644
+--- a/libraries/AC_WPNav/AC_Loiter.cpp
++++ b/libraries/AC_WPNav/AC_Loiter.cpp
+@@ -126,6 +126,7 @@ void AC_Loiter::init_target_m(const Vector2p& position_ne_m)
+     _desired_accel_ne_mss.zero();
+     _predicted_euler_angle_rad.zero();
+     _brake_accel_mss = 0.0f;
++    _heading_held = false;
+ 
+     // Set position target for stationary loiter
+     _pos_control.set_pos_desired_NE_m(position_ne_m);
+@@ -151,6 +152,7 @@ void AC_Loiter::init_target()
+     _predicted_euler_rate.zero();
+     _predicted_euler_accel.zero();
+     _brake_accel_mss = 0.0f;
++    _heading_held = false;
+ }
+ 
+ // Reduces loiter responsiveness for smoother descent during landing.
+@@ -199,7 +201,7 @@ void AC_Loiter::set_pilot_desired_acceleration_rad(float euler_roll_angle_rad, f
+ 
+     _predicted_accel_ne_mss = predicted_accel_ned_mss.xy();
+ 
+-    if (loiter_option_is_set(LoiterOption::COORDINATED_TURN_ENABLED)) {
++    if (!_heading_held && loiter_option_is_set(LoiterOption::COORDINATED_TURN_ENABLED)) {
+         Vector3f target_ang_vel_rads = _attitude_control.get_attitude_target_ang_vel();
+         Vector3f desired_velocity_ms = _pos_control.get_vel_desired_NED_ms();
+         Vector2f turn_accel_ne_mss = Vector2f(-desired_velocity_ms.y * target_ang_vel_rads.z, desired_velocity_ms.x * target_ang_vel_rads.z);
+diff --git a/libraries/AC_WPNav/AC_Loiter.h b/libraries/AC_WPNav/AC_Loiter.h
+index 876aacb..ddcf14f 100644
+--- a/libraries/AC_WPNav/AC_Loiter.h
++++ b/libraries/AC_WPNav/AC_Loiter.h
+@@ -45,6 +45,8 @@ public:
+     // Clears any pilot-requested acceleration by setting roll and pitch inputs to zero.
+     void clear_pilot_desired_acceleration() { set_pilot_desired_acceleration_rad(0.0, 0.0); }
+ 
++    void set_heading_held(bool held) { _heading_held = held; }
++
+     // Calculates the expected stopping point based on current velocity and position in the NE frame.
+     // Result is returned in meters.
+     // Uses the position controller’s deceleration model.
+@@ -135,4 +137,5 @@ protected:
+     Vector2f    _predicted_euler_accel;     // Predicted roll/pitch angular rates (in rad/s) for pilot acceleration shaping.
+     uint32_t    _brake_timer_ms;            // Timestamp (in ms) when braking logic was last triggered (sticks released).
+     float       _brake_accel_mss;           // Current braking acceleration in m/s², updated using jerk limits over time.
++    bool        _heading_held;
+ };
