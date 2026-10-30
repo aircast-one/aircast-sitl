@@ -215,7 +215,9 @@ void AAircastCamera::BeginPlay()
 	Drone = GetWorld()->SpawnActor<AAircastDrone>();
 	Player = FParse::Param(CommandLine, TEXT("Play")) ? GetWorld()->SpawnActor<AAircastPlayer>() : nullptr;
 
-	GetWorld()->GetFirstPlayerController()->SetViewTarget(this);
+	APlayerController* Controller = GetWorld()->GetFirstPlayerController();
+	Controller->SetViewTarget(this);
+	Controller->bShowMouseCursor = true;
 	Connect();
 }
 
