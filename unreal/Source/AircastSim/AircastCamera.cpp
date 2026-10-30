@@ -214,12 +214,6 @@ void AAircastCamera::BeginPlay()
 	Car = GetWorld()->SpawnActor<AAircastCar>();
 	Drone = GetWorld()->SpawnActor<AAircastDrone>();
 	Player = FParse::Param(CommandLine, TEXT("Play")) ? GetWorld()->SpawnActor<AAircastPlayer>() : nullptr;
-	if (Player)
-	{
-		APlayerController* Controller = GetWorld()->GetFirstPlayerController();
-		Controller->SetInputMode(FInputModeGameOnly());
-		Controller->bShowMouseCursor = false;
-	}
 
 	GetWorld()->GetFirstPlayerController()->SetViewTarget(this);
 	Connect();
