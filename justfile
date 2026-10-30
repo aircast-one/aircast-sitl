@@ -83,7 +83,14 @@ run:
         -p {{web_port}} \
         {{camera_ports}} \
         -e MTX_WEBRTCADDITIONALHOSTS=127.0.0.1 \
+        -e SIM_TARGET="${SIM_TARGET:-0}" \
         {{full_image}}
+
+# Fly an FPV interceptor yourself against the target drone of a running `SIM_TARGET=1 just run`. Left stick or W/S A/D: throttle and yaw; right stick or arrows: pitch and roll. flags: -Target=shahed136|orlan10|zala421 -Paint=factory|black|grey|white -SolarTime=<h> -CloudCover=<0..1> -Random[=seed] -Record=<dir> -Rtsp=<url>
+[group('run')]
+game telemetry="ws://127.0.0.1:8889" *flags:
+    just unreal-build
+    "{{unreal_root}}/Engine/Binaries/Mac/UnrealEditor.app/Contents/MacOS/UnrealEditor" "$PWD/unreal/AircastSim.uproject" -game -windowed -ResX=1280 -ResY=720 -Preview -Play "-Telemetry={{telemetry}}" "-IonToken=$(gh variable get VITE_CESIUM_ION_TOKEN -R aircast-one/aircast-sitl)" {{flags}}
 
 # Render the SITL's cameras on this Mac whenever someone watches rtsp://<site>:8554/sim (FPV gimbal) or /shoot (payload gimbal). look: photoreal | satellite | unreal (unreal renders /sim only)
 [group('run')]
@@ -140,6 +147,12 @@ camera-uninstall:
     launchctl bootout "gui/$(id -u)/{{camera_agent}}" 2>/dev/null || true
     rm -f "$HOME/Library/LaunchAgents/{{camera_agent}}.plist"
 
+# Turn a recorded dataset's H.264 video into YOLO images numbered like its labels (record with the camera's -Record=<dir>)
+[group('build')]
+dataset-frames dir:
+    ffmpeg -loglevel error -i "{{dir}}/video.mp4" -start_number 0 -fps_mode passthrough -qscale:v 2 "{{dir}}/images/%08d.jpg"
+    @echo "$(ls "{{dir}}/images" | wc -l | tr -d ' ') frames, $(find "{{dir}}/labels" -size +0 | wc -l | tr -d ' ') with the target in view"
+
 # Fetch the pinned Cesium for Unreal and build the Unreal camera project
 [group('build')]
 unreal-build:
@@ -155,6 +168,13 @@ unreal-build:
     fi
     cd unreal
     "{{unreal_root}}/Engine/Build/BatchFiles/Mac/Build.sh" AircastSimEditor Mac Development -Project="$PWD/AircastSim.uproject" -WaitMutex
+    [ -d Content/Models ] || just unreal-models
+
+# Split the drone models' propellers into their own meshes and import them into the Unreal project (sources and credits in unreal/Models)
+[group('build')]
+unreal-models:
+    cd unreal/Models && uv run -q --no-project --with trimesh --with numpy --with scipy --with pillow python split.py . build
+    "{{unreal_root}}/Engine/Binaries/Mac/UnrealEditor.app/Contents/MacOS/UnrealEditor" "$PWD/unreal/AircastSim.uproject" -run=pythonscript -script="$PWD/unreal/Models/import.py $PWD/unreal/Models/build" -unattended -nosplash -nullrhi
 
 # Stop the running SITL container
 [group('run')]

@@ -9,17 +9,30 @@ import websockets
 from pymavlink import mavutil
 
 import camera
+import target
 
 WANTED_TYPES = {'HEARTBEAT', 'ATTITUDE', 'GLOBAL_POSITION_INT', 'VFR_HUD', 'GIMBAL_DEVICE_ATTITUDE_STATUS'}
 YAW_IN_EARTH_FRAME = 64
 STREAM_SILENCE_S = 3
+STREAM_HZ = 25
 MAVLINK_PATH = '/ws/mavlink'
 
 
 def msg_to_json(msg, vehicle_sysid):
     msg_type = msg.get_type()
 
-    if msg_type == 'GLOBAL_POSITION_INT' and msg.get_srcSystem() != vehicle_sysid:
+    if msg_type == 'GLOBAL_POSITION_INT' and msg.get_srcSystem() == target.SYSID:
+        return {
+            'type': 'TARGET',
+            'lat': msg.lat / 1e7,
+            'lng': msg.lon / 1e7,
+            'relative_alt': msg.relative_alt / 1000.0,
+            'vx': msg.vx / 100.0,
+            'vy': msg.vy / 100.0,
+            'vz': msg.vz / 100.0,
+            'hdg': msg.hdg / 100.0,
+        }
+    elif msg_type == 'GLOBAL_POSITION_INT' and msg.get_srcSystem() != vehicle_sysid:
         return {
             'type': 'CAR',
             'lat': msg.lat / 1e7,
@@ -83,7 +96,7 @@ def msg_to_json(msg, vehicle_sysid):
 def request_streams(conn):
     conn.mav.request_data_stream_send(
         conn.target_system, conn.target_component,
-        mavutil.mavlink.MAV_DATA_STREAM_ALL, 10, 1
+        mavutil.mavlink.MAV_DATA_STREAM_ALL, STREAM_HZ, 1
     )
 
 

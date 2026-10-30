@@ -87,10 +87,10 @@ def find_route(home):
             time.sleep(RETRY_S)
 
 
-def connect():
+def connect(sysid):
     while True:
         try:
-            return mavutil.mavlink_connection(ROUTER, source_system=SYSID, autoreconnect=True)
+            return mavutil.mavlink_connection(ROUTER, source_system=sysid, autoreconnect=True)
         except OSError as e:
             print(f"Waiting for mavlink-router at {ROUTER}... ({e})")
             time.sleep(2)
@@ -99,7 +99,7 @@ def connect():
 def main():
     home = current_home()
     route = find_route(home)
-    conn = connect()
+    conn = connect(SYSID)
     print(f"Car (sysid {SYSID}) driving {route[1][-1]:.0f} m of road and back")
     started = last = time.monotonic()
     distance = 0.0

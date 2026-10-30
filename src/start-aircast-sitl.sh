@@ -12,6 +12,7 @@ shutdown() {
     kill -TERM "$ws_bridge_pid" 2>/dev/null || true
     kill -TERM "$mediamtx_pid" 2>/dev/null || true
     kill -TERM "$car_pid" 2>/dev/null || true
+    kill -TERM "${target_pid:-}" 2>/dev/null || true
     kill -TERM "$web_pid" 2>/dev/null || true
     kill -TERM "$router_pid" 2>/dev/null || true
     kill -TERM "$sitl_pid" 2>/dev/null || true
@@ -83,6 +84,10 @@ while true; do
 
     MAVLINK20=1 PYTHONUNBUFFERED=1 python3 /opt/aircast/car.py &
     car_pid=$!
+    if [ "${SIM_TARGET:-0}" = 1 ]; then
+        MAVLINK20=1 PYTHONUNBUFFERED=1 python3 /opt/aircast/target.py &
+        target_pid=$!
+    fi
 
     sleep 2
     if [ -z "$router_pid" ] || ! kill -0 "$router_pid" 2>/dev/null; then
@@ -94,6 +99,7 @@ while true; do
     wait $sitl_pid
     exit_code=$?
     kill -TERM "$car_pid" 2>/dev/null || true
+    kill -TERM "${target_pid:-}" 2>/dev/null || true
 
     if [ "$exit_code" -eq 143 ] || [ "$exit_code" -eq 130 ]; then
         echo "SITL received termination signal, shutting down..."

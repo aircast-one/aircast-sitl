@@ -5,6 +5,6 @@ public class AircastSim : ModuleRules
 	public AircastSim(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-		PublicDependencyModuleNames.AddRange(new[] { "Core", "CoreUObject", "Engine", "WebSockets", "Json", "CesiumRuntime" });
+		PublicDependencyModuleNames.AddRange(new[] { "Core", "CoreUObject", "Engine", "WebSockets", "Json", "CesiumRuntime", "AssetRegistry", "RenderCore", "RHI", "InputCore" });
 	}
 }

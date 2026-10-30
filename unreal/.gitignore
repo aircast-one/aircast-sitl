@@ -3,3 +3,5 @@ Intermediate/
 Saved/
 DerivedDataCache/
 cesium-request-cache.sqlite*
+Content/
+Models/build/
