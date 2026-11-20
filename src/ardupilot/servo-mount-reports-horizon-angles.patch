@@ -1,0 +1,25 @@
+diff --git a/libraries/AP_Mount/AP_Mount_Servo.cpp b/libraries/AP_Mount/AP_Mount_Servo.cpp
+index c986774..9eaa6b4 100644
+--- a/libraries/AP_Mount/AP_Mount_Servo.cpp
++++ b/libraries/AP_Mount/AP_Mount_Servo.cpp
+@@ -83,6 +83,20 @@ bool AP_Mount_Servo::get_attitude_quaternion(Quaternion& att_quat)
+         yaw_rad = constrain_float(_angle_bf_output_rad.z, radians(_params.yaw_angle_min), radians(_params.yaw_angle_max));
+     }
+ 
++    if (requires_stabilization) {
++        const AP_AHRS &ahrs = AP::ahrs();
++        Vector2f lean_rad = {ahrs.get_roll_rad(), ahrs.get_pitch_rad()};
++        if (has_pan_control()) {
++            lean_rad.rotate(-yaw_rad);
++        }
++        if (has_roll_control()) {
++            roll_rad += lean_rad.x;
++        }
++        if (has_pitch_control()) {
++            pitch_rad += lean_rad.y;
++        }
++    }
++
+     // convert to quaternion
+     att_quat.from_euler(roll_rad, pitch_rad, yaw_rad);
+     return true;
