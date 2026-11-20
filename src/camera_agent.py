@@ -43,7 +43,7 @@ def chrome(feed):
 
 def unreal():
     return [
-        UNREAL, str(UNREAL_PROJECT), '-game', '-windowed', '-ResX=1280', '-ResY=720', '-log',
+        UNREAL, str(UNREAL_PROJECT), '-game', '-RenderOffScreen', '-ResX=1280', '-ResY=720',
         f'-Telemetry={BRIDGE}', f'-Rtsp={RTSP}/sim', f"-IonToken={os.environ.get('CESIUM_ION_TOKEN', '')}",
     ]
 

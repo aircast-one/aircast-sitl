@@ -16,6 +16,10 @@
 		{
 			"Name": "PythonScriptPlugin",
 			"Enabled": true
+		},
+		{
+			"Name": "PCG",
+			"Enabled": false
 		}
 	]
 }
