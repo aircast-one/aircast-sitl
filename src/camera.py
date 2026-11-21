@@ -7,7 +7,8 @@ from pymavlink import mavutil
 MAV = mavutil.mavlink
 HFOV_DEG = 60.0
 RESOLUTION = (1280, 720)
-VFOV_DEG = math.degrees(2 * math.atan(math.tan(math.radians(HFOV_DEG / 2)) * RESOLUTION[1] / RESOLUTION[0]))
+ZOOM_MAX_X = 10.0
+ZOOM_STEP_PERCENT = 10.0
 FOCAL_MM = 4.0
 SENSOR_H_MM = 2 * FOCAL_MM * math.tan(math.radians(HFOV_DEG / 2))
 SENSOR_V_MM = SENSOR_H_MM * RESOLUTION[1] / RESOLUTION[0]
@@ -17,7 +18,10 @@ TRACKING_FLAGS = (
     | MAV.CAMERA_CAP_FLAGS_HAS_TRACKING_GEO_STATUS
 )
 FPV = {'component': MAV.MAV_COMP_ID_CAMERA, 'model': 'SITL FPV camera', 'gimbal_device': 1, 'flags': TRACKING_FLAGS, 'tracking': True}
-SHOOT = {'component': MAV.MAV_COMP_ID_CAMERA2, 'model': 'SITL payload camera', 'gimbal_device': 2, 'flags': 0, 'tracking': False}
+SHOOT = {
+    'component': MAV.MAV_COMP_ID_CAMERA2, 'model': 'SITL payload camera', 'gimbal_device': 2,
+    'flags': MAV.CAMERA_CAP_FLAGS_HAS_BASIC_ZOOM, 'tracking': False,
+}
 CAMERAS = (FPV, SHOOT)
 GAIN_PER_S = 2.0
 HEARTBEAT_S = 1.0
@@ -30,6 +34,30 @@ INTERVALS = {
     MAV.MAVLINK_MSG_ID_CAMERA_TRACKING_IMAGE_STATUS: 'status_s',
     MAV.MAVLINK_MSG_ID_CAMERA_TRACKING_GEO_STATUS: 'geo_s',
 }
+
+
+def vertical_fov(hfov_deg):
+    return math.degrees(2 * math.atan(math.tan(math.radians(hfov_deg / 2)) * RESOLUTION[1] / RESOLUTION[0]))
+
+
+VFOV_DEG = vertical_fov(HFOV_DEG)
+
+
+def zoomed_hfov(percent):
+    return math.degrees(2 * math.atan(math.tan(math.radians(HFOV_DEG / 2)) / ZOOM_MAX_X ** (percent / 100)))
+
+
+def zoom_after(percent, kind, value):
+    levels = {
+        MAV.ZOOM_TYPE_STEP: percent + value * ZOOM_STEP_PERCENT,
+        MAV.ZOOM_TYPE_RANGE: value,
+    }
+    level = levels.get(int(kind)) if math.isfinite(kind) else None
+    return None if level is None or not math.isfinite(level) else min(max(level, 0.0), 100.0)
+
+
+def asked_for(command, p, message, legacy):
+    return command == legacy or (command == MAV.MAV_CMD_REQUEST_MESSAGE and int(p[0]) == message)
 
 
 def padded(text, size):
@@ -97,6 +125,22 @@ def send_information(conn, cam):
     )
 
 
+def send_settings(conn, zoom):
+    conn.mav.camera_settings_send(int(time.monotonic() * 1000) & 0xFFFFFFFF, MAV.CAMERA_MODE_VIDEO, zoom, math.nan)
+
+
+def send_fov(conn, zoom):
+    unknown = 2**31 - 1
+    hfov = zoomed_hfov(zoom)
+    conn.mav.camera_fov_status_send(
+        int(time.monotonic() * 1000) & 0xFFFFFFFF,
+        unknown, unknown, unknown, unknown, unknown, unknown,
+        [math.nan] * 4,
+        hfov,
+        vertical_fov(hfov),
+    )
+
+
 def send_rates(conn, cam, pitch_rate, yaw_rate):
     conn.mav.gimbal_manager_set_pitchyaw_send(
         conn.target_system,
@@ -145,10 +189,15 @@ def send_geo(conn, car):
 def answer(conn, cam, msg, state, box):
     conn.mav.srcComponent = cam['component']
     command, p = msg.command, (msg.param1, msg.param2, msg.param3, msg.param4)
-    asked_info = command == MAV.MAV_CMD_REQUEST_CAMERA_INFORMATION or (
-        command == MAV.MAV_CMD_REQUEST_MESSAGE and int(p[0]) == MAV.MAVLINK_MSG_ID_CAMERA_INFORMATION
-    )
-    if asked_info:
+    asked_info = asked_for(command, p, MAV.MAVLINK_MSG_ID_CAMERA_INFORMATION, MAV.MAV_CMD_REQUEST_CAMERA_INFORMATION)
+    asked_settings = asked_for(command, p, MAV.MAVLINK_MSG_ID_CAMERA_SETTINGS, MAV.MAV_CMD_REQUEST_CAMERA_SETTINGS)
+    asked_fov = asked_for(command, p, MAV.MAVLINK_MSG_ID_CAMERA_FOV_STATUS, None)
+    zooms = command == MAV.MAV_CMD_SET_CAMERA_ZOOM and cam['flags'] & MAV.CAMERA_CAP_FLAGS_HAS_BASIC_ZOOM
+    zoom = zoom_after(state['zoom'], p[0], p[1]) if zooms else None
+    if asked_info or asked_settings or asked_fov:
+        result = MAV.MAV_RESULT_ACCEPTED
+    elif zoom is not None:
+        state['zoom'] = zoom
         result = MAV.MAV_RESULT_ACCEPTED
     elif command == MAV.MAV_CMD_SET_MESSAGE_INTERVAL and int(p[0]) in INTERVALS:
         state[INTERVALS[int(p[0])]] = None if p[1] < 0 else max(p[1], 100_000) / 1e6
@@ -168,14 +217,18 @@ def answer(conn, cam, msg, state, box):
     conn.mav.command_ack_send(command, result, 0, 0, msg.get_srcSystem(), msg.get_srcComponent())
     if asked_info:
         send_information(conn, cam)
+    if asked_settings:
+        send_settings(conn, state['zoom'])
+    if asked_fov:
+        send_fov(conn, state['zoom'])
 
 
-async def run(host, port, car_box):
+async def run(host, port, car_box, lens_changed):
     conn = await asyncio.to_thread(connect, host, port)
     by_component = {cam['component']: cam for cam in CAMERAS}
     states = {
         cam['component']: {
-            'tracking': False, 'status_s': None, 'geo_s': None, 'car': None,
+            'tracking': False, 'status_s': None, 'geo_s': None, 'car': None, 'zoom': 0.0,
             'seen_at': 0.0, 'beat_at': 0.0, 'steered_at': 0.0, 'status_at': 0.0, 'geo_at': 0.0,
         }
         for cam in CAMERAS
@@ -190,7 +243,11 @@ async def run(host, port, car_box):
                     state['car'] = msg if msg.get_srcSystem() != conn.target_system else state['car']
             elif msg.target_system == conn.mav.srcSystem and msg.target_component in by_component:
                 cam = by_component[msg.target_component]
-                answer(conn, cam, msg, states[cam['component']], fresh)
+                state = states[cam['component']]
+                zoom = state['zoom']
+                answer(conn, cam, msg, state, fresh)
+                if state['zoom'] != zoom:
+                    await lens_changed(cam['gimbal_device'], zoomed_hfov(state['zoom']))
         for cam in CAMERAS:
             state = states[cam['component']]
             conn.mav.srcComponent = cam['component']

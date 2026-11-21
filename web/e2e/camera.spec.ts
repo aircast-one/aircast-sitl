@@ -34,6 +34,12 @@ test.describe("Camera Page", () => {
     expect(criticalErrors).toEqual([]);
   });
 
+  test("the payload camera narrows its view to the lens the bridge reports", async ({ page }) => {
+    await page.routeWebSocket(/:8889\/?$/, (bridge) => bridge.send(JSON.stringify({ type: "LENS", device: 2, hfov: 6.6 })));
+    await page.goto("/camera?gimbal=2");
+    await expect(page.getByText(/^· 7° wide ·/)).toBeVisible();
+  });
+
   test("the dashboard opens each camera's live stream in a new tab and lists its RTSP address", async ({ page }) => {
     await page.goto("/");
     const sidebar = page.getByRole("complementary");

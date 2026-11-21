@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Cartesian3, JulianDate, createWorldTerrainAsync } from "cesium";
+import { Cartesian3, JulianDate, Math as CesiumMath, PerspectiveFrustum, createWorldTerrainAsync } from "cesium";
 import { bridgeUrl, useTelemetry } from "@/hooks/useTelemetry.ts";
 import { useCesiumViewer } from "@/hooks/useCesiumViewer.ts";
 import { Button } from "@/components/ui/button.tsx";
@@ -11,6 +11,7 @@ import { publishWhip } from "@/lib/whip.ts";
 const FRAME_RATE = 30;
 const SUPERSAMPLE = 1.5;
 const BOX_REPORT_MS = 100;
+const WIDE_HFOV_DEG = 60;
 const CAMERAS: Readonly<Record<number, { name: string; holdsRoll: boolean }>> = {
   1: { name: "FPV camera", holdsRoll: false },
   2: { name: "Payload camera", holdsRoll: true },
@@ -75,6 +76,9 @@ export function CameraPage() {
         destination: Cartesian3.fromDegrees(pose.current.lng, pose.current.lat, pose.current.alt),
         orientation: { heading: pose.current.aimHeading, pitch: pose.current.aimPitch, roll: pose.current.aimRoll },
       });
+      if (viewer.camera.frustum instanceof PerspectiveFrustum) {
+        viewer.camera.frustum.fov = CesiumMath.toRadians(telemetryRef.current.lenses[gimbal] ?? WIDE_HFOV_DEG);
+      }
       car.drive(telemetryRef.current.car);
     });
     return () => {
@@ -96,6 +100,7 @@ export function CameraPage() {
   }, [viewerRef, whipUrl, publisher]);
 
   const { name } = camera;
+  const hfov = telemetry.lenses[gimbal] ?? WIDE_HFOV_DEG;
   return (
     <>
       <title>{`${name} · Aircast SITL`}</title>
@@ -105,7 +110,7 @@ export function CameraPage() {
           <Link to="/">SITL Dashboard</Link>
         </Button>
         <p className="rounded-md bg-background/60 px-2.5 py-1.5 font-mono text-xs">
-          {name} <span className="text-muted-foreground">· the frame streamed over RTSP and WHIP</span>
+          {name} <span className="text-muted-foreground">· {Math.round(hfov)}° wide · the frame streamed over RTSP and WHIP</span>
         </p>
       </div>
     </>

@@ -24,6 +24,7 @@ export interface Telemetry {
   homeLat: number;
   homeLng: number;
   gimbals: Readonly<Record<number, Gimbal>>;
+  lenses: Readonly<Record<number, number>>;
   car: Car | null;
 }
 
@@ -64,6 +65,7 @@ const initialTelemetry: Telemetry = {
   homeLat: 0,
   homeLng: 0,
   gimbals: {},
+  lenses: {},
   car: null,
 };
 
@@ -136,6 +138,8 @@ const applyMessage = (prev: Telemetry, msg: MavlinkMessage): Telemetry => {
           },
         },
       };
+    case "LENS":
+      return { ...prev, lenses: { ...prev.lenses, [msg.device as number]: msg.hfov as number } };
     case "CAR":
       return { ...prev, car: { lat: msg.lat as number, lng: msg.lng as number, heading: ((msg.hdg as number) * Math.PI) / 180 } };
     case "HEARTBEAT":

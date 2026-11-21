@@ -117,16 +117,26 @@ def connect_mavlink(host, port):
 clients = set()
 demands = {}
 car_box = {'box': None, 'at': 0.0}
+lenses = {}
 
 
 def demand_message():
     return json.dumps({'type': 'CAMERA_DEMAND', 'feeds': sorted(set(demands.values()))})
 
 
+def lens_message(device, hfov):
+    return json.dumps({'type': 'LENS', 'device': device, 'hfov': hfov})
+
+
 async def broadcast(payload):
     sockets = list(clients)
     results = await asyncio.gather(*(ws.send(payload) for ws in sockets), return_exceptions=True)
     clients.difference_update(ws for ws, result in zip(sockets, results) if isinstance(result, websockets.ConnectionClosed))
+
+
+async def lens_changed(device, hfov):
+    lenses[device] = hfov
+    await broadcast(lens_message(device, hfov))
 
 
 def report_from(message):
@@ -170,6 +180,7 @@ async def ws_handler(websocket, mavlink_host, mavlink_port):
     print(f'WebSocket client connected: {addr}')
     try:
         await websocket.send(demand_message())
+        await asyncio.gather(*(websocket.send(lens_message(device, hfov)) for device, hfov in lenses.items()))
         async for message in websocket:
             report = report_from(message)
             if report and report.get('type') == 'CAR_BOX':
@@ -226,7 +237,7 @@ async def main():
         print(f'WebSocket MAVLink bridge on ws://0.0.0.0:{ws_port}, raw MAVLink on {MAVLINK_PATH}')
         tasks = [mavlink_reader(mavlink_host, mavlink_port)]
         if os.environ.get('SIM_CAMERA') == '1':
-            tasks.append(camera.run(mavlink_host, mavlink_port, lambda: (car_box['box'], car_box['at'])))
+            tasks.append(camera.run(mavlink_host, mavlink_port, lambda: (car_box['box'], car_box['at']), lens_changed))
         await asyncio.gather(*tasks)
 
 
