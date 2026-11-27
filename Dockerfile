@@ -122,6 +122,7 @@ COPY src/demand.py /opt/aircast/demand.py
 COPY src/ws_bridge.py /opt/aircast/ws_bridge.py
 COPY src/camera.py /opt/aircast/camera.py
 COPY src/gimbal.parm /usr/local/share/aircast/gimbal.parm
+COPY src/logging.parm /usr/local/share/aircast/logging.parm
 COPY src/pilot.parm /usr/local/share/aircast/pilot.parm
 COPY src/airframe.parm /usr/local/share/aircast/airframe.parm
 COPY src/racer.json /usr/local/share/aircast/racer.json

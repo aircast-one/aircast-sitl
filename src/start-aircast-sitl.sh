@@ -59,17 +59,17 @@ while true; do
         plane)
             binary=arduplane
             model=plane
-            defaults="$MODEL_PARAMS/plane.parm,$AIRCAST_PARAMS/gimbal.parm"
+            defaults="$MODEL_PARAMS/plane.parm,$AIRCAST_PARAMS/gimbal.parm,$AIRCAST_PARAMS/logging.parm"
             ;;
         quadplane)
             binary=arduplane
             model=quadplane
-            defaults="$DEFAULT_PARAMS/quadplane.parm,$AIRCAST_PARAMS/gimbal.parm"
+            defaults="$DEFAULT_PARAMS/quadplane.parm,$AIRCAST_PARAMS/gimbal.parm,$AIRCAST_PARAMS/logging.parm"
             ;;
         *)
             binary=arducopter
             model=quad:$AIRCAST_PARAMS/racer.json
-            defaults="$DEFAULT_PARAMS/copter.parm,$AIRCAST_PARAMS/gimbal.parm,$AIRCAST_PARAMS/airframe.parm,$AIRCAST_PARAMS/pilot.parm,$AIRCAST_PARAMS/follow.parm"
+            defaults="$DEFAULT_PARAMS/copter.parm,$AIRCAST_PARAMS/gimbal.parm,$AIRCAST_PARAMS/airframe.parm,$AIRCAST_PARAMS/pilot.parm,$AIRCAST_PARAMS/follow.parm,$AIRCAST_PARAMS/logging.parm"
             ;;
     esac
     if [ -s "$PARAMS_FILE" ]; then
